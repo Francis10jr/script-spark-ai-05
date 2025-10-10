@@ -10,6 +10,9 @@ import { ArgumentTab } from "@/components/tabs/ArgumentTab";
 import { StorylineTab } from "@/components/tabs/StorylineTab";
 import { BeatSheetTab } from "@/components/tabs/BeatSheetTab";
 import { ScriptTab } from "@/components/tabs/ScriptTab";
+import { StoryboardTab } from "@/components/tabs/StoryboardTab";
+import { BreakdownTab } from "@/components/tabs/BreakdownTab";
+import { BudgetTab } from "@/components/tabs/BudgetTab";
 
 const Project = () => {
   const { id } = useParams();
@@ -150,6 +153,15 @@ const Project = () => {
               projectId={id!}
               beatSheet={content.beat_sheet}
             />
+          )}
+          {currentTab === "storyboard" && (
+            <StoryboardTab projectId={id!} />
+          )}
+          {currentTab === "breakdown" && (
+            <BreakdownTab projectId={id!} />
+          )}
+          {currentTab === "budget" && (
+            <BudgetTab projectId={id!} />
           )}
         </main>
       </div>
