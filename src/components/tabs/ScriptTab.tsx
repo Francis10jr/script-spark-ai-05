@@ -8,8 +8,11 @@ import { Sparkles, Save, FileDown, Upload, FileText, CheckCircle } from "lucide-
 import * as pdfjsLib from "pdfjs-dist";
 import mammoth from "mammoth";
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Configure PDF.js worker from node_modules
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 interface ScriptTabProps {
   content: any;
