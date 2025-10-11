@@ -5,6 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Sparkles, Save, FileDown, Upload, FileText, CheckCircle } from "lucide-react";
+import * as pdfjsLib from "pdfjs-dist";
+import mammoth from "mammoth";
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface ScriptTabProps {
   content: any;
@@ -101,12 +106,28 @@ export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabPr
       let extractedText = "";
 
       if (fileExt === '.txt' || fileExt === '.fountain') {
-        // Leitura direta
         extractedText = await file.text();
-      } else if (fileExt === '.pdf' || fileExt === '.docx') {
-        // Para PDF e DOCX, vamos apenas ler como texto por enquanto
-        // Em produção, você pode adicionar bibliotecas específicas
-        extractedText = await file.text();
+      } else if (fileExt === '.pdf') {
+        // Extrair texto de PDF
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const textParts: string[] = [];
+        
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item: any) => item.str)
+            .join(' ');
+          textParts.push(pageText);
+        }
+        
+        extractedText = textParts.join('\n\n');
+      } else if (fileExt === '.docx') {
+        // Extrair texto de DOCX
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        extractedText = result.value;
       }
 
       setText(extractedText);
