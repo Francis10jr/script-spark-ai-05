@@ -142,15 +142,139 @@ serve(async (req) => {
       content: { scenes: beatScenes },
     });
 
+    // 5. Criar cenas no banco de dados (tabela scenes)
+    console.log("Criando cenas no banco...");
+    for (const scene of beatScenes) {
+      await supabase.from("scenes").insert({
+        project_id: projectId,
+        scene_number: scene.number,
+        order_position: scene.number,
+        int_ext: scene.intExt,
+        location: scene.location,
+        time_of_day: scene.dayNight,
+        description: scene.description,
+        characters: scene.characters || [],
+        estimated_duration: scene.duration || 2,
+      });
+    }
+
+    // 6. Gerar storyboards para cada cena
+    console.log("Gerando storyboards...");
+    const { data: createdScenes } = await supabase
+      .from("scenes")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("scene_number");
+
+    if (createdScenes && createdScenes.length > 0) {
+      for (const scene of createdScenes) {
+        const storyboardPrompt = `Analise a seguinte cena e crie 3-5 frames de storyboard:
+
+CENA ${scene.scene_number} - ${scene.int_ext} ${scene.location} - ${scene.time_of_day}
+Descrição: ${scene.description}
+
+Retorne APENAS um array JSON:
+[{"frame_number": 1, "description": "descrição", "camera_angle": "ângulo", "camera_movement": "movimento", "image_prompt": "prompt para imagem"}]`;
+
+        const storyboardResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: "Você é um diretor de cinema. Responda APENAS com JSON válido." },
+              { role: "user", content: storyboardPrompt },
+            ],
+          }),
+        });
+
+        if (storyboardResponse.ok) {
+          const storyboardData = await storyboardResponse.json();
+          let storyboardContent = storyboardData.choices?.[0]?.message?.content || "";
+          const storyboardMatch = storyboardContent.match(/\[[\s\S]*\]/);
+          if (storyboardMatch) {
+            const frames = JSON.parse(storyboardMatch[0]);
+            for (const frame of frames) {
+              await supabase.from("storyboards").insert({
+                scene_id: scene.id,
+                frame_number: frame.frame_number,
+                description: frame.description,
+                camera_angle: frame.camera_angle,
+                camera_movement: frame.camera_movement,
+                image_prompt: frame.image_prompt,
+              });
+            }
+          }
+        }
+      }
+
+      // 7. Gerar decupagem técnica para cada cena
+      console.log("Gerando decupagem técnica...");
+      for (const scene of createdScenes) {
+        const breakdownPrompt = `Analise a cena e crie decupagem técnica com 3-8 planos:
+
+CENA ${scene.scene_number} - ${scene.int_ext} ${scene.location} - ${scene.time_of_day}
+Descrição: ${scene.description}
+
+Retorne APENAS um array JSON:
+[{"shot_number": "1A", "shot_type": "tipo", "framing": "enquadramento", "movement": "movimento", "lens": "lente", "equipment": ["eq1"], "lighting_setup": "iluminação", "sound_notes": "som", "vfx_notes": "vfx", "estimated_setup_time": 15, "notes": "notas"}]`;
+
+        const breakdownResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: "Você é um diretor de fotografia. Responda APENAS com JSON válido." },
+              { role: "user", content: breakdownPrompt },
+            ],
+          }),
+        });
+
+        if (breakdownResponse.ok) {
+          const breakdownData = await breakdownResponse.json();
+          let breakdownContent = breakdownData.choices?.[0]?.message?.content || "";
+          const breakdownMatch = breakdownContent.match(/\[[\s\S]*\]/);
+          if (breakdownMatch) {
+            const shots = JSON.parse(breakdownMatch[0]);
+            for (const shot of shots) {
+              await supabase.from("technical_breakdown").insert({
+                scene_id: scene.id,
+                shot_number: shot.shot_number,
+                shot_type: shot.shot_type,
+                framing: shot.framing,
+                movement: shot.movement,
+                lens: shot.lens,
+                equipment: shot.equipment,
+                lighting_setup: shot.lighting_setup,
+                sound_notes: shot.sound_notes,
+                vfx_notes: shot.vfx_notes,
+                estimated_setup_time: shot.estimated_setup_time,
+                notes: shot.notes,
+              });
+            }
+          }
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: "Todo o conteúdo foi gerado com sucesso!",
+        message: "Todo o conteúdo foi gerado com sucesso, incluindo storyboards e decupagem técnica!",
         generated: {
           premise: true,
           argument: true,
           storyline: true,
           beatSheet: true,
+          storyboards: true,
+          breakdown: true,
         }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
