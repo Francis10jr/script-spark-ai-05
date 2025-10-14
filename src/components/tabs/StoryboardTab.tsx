@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, Trash2, Image as ImageIcon } from "lucide-react";
+import { Loader2, Plus, Trash2, Image as ImageIcon, Sparkles } from "lucide-react";
 
 interface Scene {
   id: string;
@@ -36,6 +36,7 @@ export const StoryboardTab = ({ projectId }: StoryboardTabProps) => {
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [newFrame, setNewFrame] = useState({
     description: "",
     image_prompt: "",
@@ -135,6 +136,45 @@ export const StoryboardTab = ({ projectId }: StoryboardTabProps) => {
       }
     } catch (error: any) {
       toast.error("Erro ao remover quadro");
+    }
+  };
+
+  const handleGenerateWithAI = async () => {
+    setGenerating(true);
+    try {
+      toast.info("Gerando storyboards com IA... Isso pode levar alguns minutos.");
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-storyboard`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ projectId }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Erro ao gerar storyboards");
+      }
+      
+      const data = await response.json();
+      toast.success(data.message);
+      
+      // Recarregar storyboards
+      if (selectedSceneId) {
+        loadStoryboards(selectedSceneId);
+      } else {
+        loadScenes();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao gerar storyboards");
+      console.error(error);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -291,6 +331,25 @@ export const StoryboardTab = ({ projectId }: StoryboardTabProps) => {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardContent className="pt-6">
+          <Button 
+            onClick={handleGenerateWithAI} 
+            disabled={generating || scenes.length === 0}
+            className="w-full bg-gradient-to-r from-primary to-secondary"
+            size="lg"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            {generating ? "Gerando Storyboards..." : "Gerar Storyboards com IA"}
+          </Button>
+          {scenes.length === 0 && (
+            <p className="text-xs text-destructive text-center mt-2">
+              Crie a escaleta primeiro para gerar storyboards
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
