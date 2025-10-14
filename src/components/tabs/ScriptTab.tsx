@@ -29,6 +29,7 @@ export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabPr
   );
   const [isDragging, setIsDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [generatingAll, setGeneratingAll] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async () => {
@@ -135,12 +136,63 @@ export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabPr
 
       setText(extractedText);
       setUploadedFile({ name: file.name, source: "upload" });
+      
+      // Salvar automaticamente
+      onSave({ 
+        text: extractedText, 
+        fileName: file.name,
+        source: "upload" 
+      });
+      
       toast.success("Roteiro carregado com sucesso!");
     } catch (error) {
       toast.error("Erro ao processar arquivo");
       console.error(error);
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handleGenerateAllFromUpload = async () => {
+    if (!text) {
+      toast.error("Nenhum roteiro carregado");
+      return;
+    }
+
+    setGeneratingAll(true);
+    try {
+      toast.info("Gerando todo o conteúdo com IA... Isso pode levar alguns minutos.");
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-uploaded-script`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            scriptText: text,
+            projectId,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Erro na geração");
+      }
+      
+      const data = await response.json();
+      toast.success("Todo o conteúdo foi gerado com sucesso! Confira as outras abas.");
+      
+      // Recarregar a página para atualizar todo o conteúdo
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao gerar conteúdo");
+      console.error(error);
+    } finally {
+      setGeneratingAll(false);
     }
   };
 
@@ -281,9 +333,22 @@ export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabPr
                   )}
                 </Badge>
               )}
-              <Button onClick={handleReplaceScript} variant="outline" size="sm">
-                Substituir Roteiro
-              </Button>
+              <div className="flex gap-2">
+                {uploadedFile?.source === "upload" && (
+                  <Button 
+                    onClick={handleGenerateAllFromUpload} 
+                    disabled={generatingAll}
+                    size="sm"
+                    className="bg-gradient-to-r from-primary to-secondary"
+                  >
+                    <Sparkles className="w-3 h-3 mr-2" />
+                    {generatingAll ? "Gerando tudo..." : "Gerar Todo Conteúdo com IA"}
+                  </Button>
+                )}
+                <Button onClick={handleReplaceScript} variant="outline" size="sm">
+                  Substituir Roteiro
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>

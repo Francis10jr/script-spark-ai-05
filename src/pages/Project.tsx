@@ -18,7 +18,7 @@ const Project = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
-  const [currentTab, setCurrentTab] = useState("premise");
+  const [currentTab, setCurrentTab] = useState("script");
   const [content, setContent] = useState<any>({});
   const [loading, setLoading] = useState(true);
 
