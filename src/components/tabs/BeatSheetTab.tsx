@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Sparkles, Save, Plus, Trash2, MoveUp, MoveDown } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Scene {
   id: string;
@@ -35,8 +36,7 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
     setGenerating(true);
     try {
       // Buscar o roteiro completo do banco
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data: scriptData } = await supabase
+      const { data: scriptData, error: scriptError } = await supabase
         .from("scripts")
         .select("content")
         .eq("project_id", projectId)
@@ -44,7 +44,7 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
         .limit(1)
         .single();
 
-      if (!scriptData?.content) {
+      if (scriptError || !scriptData?.content) {
         toast.error("Nenhum roteiro encontrado. Faça upload ou gere um roteiro primeiro.");
         return;
       }
@@ -60,7 +60,6 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
           body: JSON.stringify({
             type: "beat_sheet",
             context: { 
-              storyline,
               script: scriptData.content 
             },
           }),
