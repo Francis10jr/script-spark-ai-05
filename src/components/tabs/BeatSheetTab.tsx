@@ -32,13 +32,23 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
   const [generating, setGenerating] = useState(false);
 
   const handleGenerate = async () => {
-    if (!storyline?.acts) {
-      toast.error("Crie uma storyline primeiro");
-      return;
-    }
-    
     setGenerating(true);
     try {
+      // Buscar o roteiro completo do banco
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data: scriptData } = await supabase
+        .from("scripts")
+        .select("content")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!scriptData?.content) {
+        toast.error("Nenhum roteiro encontrado. Faça upload ou gere um roteiro primeiro.");
+        return;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-content`,
         {
@@ -49,19 +59,26 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
           },
           body: JSON.stringify({
             type: "beat_sheet",
-            context: { storyline },
+            context: { 
+              storyline,
+              script: scriptData.content 
+            },
           }),
         }
       );
 
-      if (!response.ok) throw new Error("Erro na geração");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro na geração");
+      }
       
       const data = await response.json();
       const generatedScenes = JSON.parse(data.content);
       setScenes(generatedScenes);
-      toast.success("Escaleta gerada!");
-    } catch (error) {
-      toast.error("Erro ao gerar escaleta");
+      toast.success(`${generatedScenes.length} cenas geradas com sucesso!`);
+    } catch (error: any) {
+      console.error("Erro ao gerar escaleta:", error);
+      toast.error(error.message || "Erro ao gerar escaleta");
     } finally {
       setGenerating(false);
     }
