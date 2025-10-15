@@ -35,16 +35,17 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      // Buscar o roteiro completo do banco
+      // Buscar o roteiro do project_content
       const { data: scriptData, error: scriptError } = await supabase
-        .from("scripts")
+        .from("project_content")
         .select("content")
         .eq("project_id", projectId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+        .eq("content_type", "script")
+        .maybeSingle();
 
-      if (scriptError || !scriptData?.content) {
+      const scriptContent = scriptData?.content as { text?: string } | null;
+      
+      if (scriptError || !scriptContent?.text) {
         toast.error("Nenhum roteiro encontrado. Faça upload ou gere um roteiro primeiro.");
         return;
       }
@@ -60,7 +61,7 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
           body: JSON.stringify({
             type: "beat_sheet",
             context: { 
-              script: scriptData.content 
+              script: scriptContent.text 
             },
           }),
         }
