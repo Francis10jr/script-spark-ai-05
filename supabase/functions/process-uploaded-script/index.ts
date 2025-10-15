@@ -49,7 +49,7 @@ serve(async (req) => {
       project_id: projectId,
       content_type: "premise",
       content: { text: premiseText },
-    });
+    }, { onConflict: 'project_id,content_type' });
 
     // 2. Gerar Argumento
     console.log("Gerando argumento...");
@@ -76,7 +76,7 @@ serve(async (req) => {
       project_id: projectId,
       content_type: "argument",
       content: { text: argumentText },
-    });
+    }, { onConflict: 'project_id,content_type' });
 
     // 3. Gerar Storyline (3 atos)
     console.log("Gerando storyline...");
@@ -108,7 +108,7 @@ serve(async (req) => {
       project_id: projectId,
       content_type: "storyline",
       content: { acts: storylineActs },
-    });
+    }, { onConflict: 'project_id,content_type' });
 
     // 4. Gerar Escaleta (beat sheet)
     console.log("Gerando escaleta...");
@@ -140,7 +140,7 @@ serve(async (req) => {
       project_id: projectId,
       content_type: "beat_sheet",
       content: { scenes: beatScenes },
-    });
+    }, { onConflict: 'project_id,content_type' });
 
     // 5. Criar cenas no banco de dados (tabela scenes)
     console.log("Criando cenas no banco...");

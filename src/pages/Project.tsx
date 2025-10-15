@@ -66,6 +66,8 @@ const Project = () => {
           project_id: id,
           content_type: type,
           content: data,
+        }, {
+          onConflict: 'project_id,content_type'
         });
 
       if (error) throw error;
