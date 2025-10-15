@@ -119,10 +119,10 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: "Você é um roteirista profissional. Responda APENAS com JSON válido." },
-          { role: "user", content: `Analise o roteiro e crie uma escaleta com 8-12 cenas. Retorne APENAS um array JSON: [{"id": "scene-X", "number": 1, "intExt": "INT", "location": "LOCAL", "dayNight": "DIA", "description": "descrição", "characters": [], "duration": 2}]\n\nRoteiro:\n${scriptText.slice(0, 6000)}` },
+          { role: "user", content: `Analise o roteiro COMPLETO e crie uma escaleta com TODAS as cenas do roteiro. Identifique cada cena (INT/EXT, LOCAL, DIA/NOITE) e crie um item para cada uma. Retorne APENAS um array JSON: [{"id": "scene-X", "number": 1, "intExt": "INT", "location": "LOCAL", "dayNight": "DIA", "description": "descrição detalhada da cena", "characters": ["personagem1", "personagem2"], "duration": 2}]\n\nRoteiro completo:\n${scriptText}` },
         ],
       }),
     });
