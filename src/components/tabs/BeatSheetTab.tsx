@@ -73,7 +73,16 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
       }
       
       const data = await response.json();
-      const generatedScenes = JSON.parse(data.content);
+      
+      // Limpar markdown code blocks se existirem
+      let cleanContent = data.content.trim();
+      if (cleanContent.startsWith('```json')) {
+        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanContent.startsWith('```')) {
+        cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      const generatedScenes = JSON.parse(cleanContent);
       setScenes(generatedScenes);
       toast.success(`${generatedScenes.length} cenas geradas com sucesso!`);
     } catch (error: any) {
