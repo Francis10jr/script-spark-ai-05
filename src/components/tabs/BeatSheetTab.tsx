@@ -84,7 +84,35 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
       
       const generatedScenes = JSON.parse(cleanContent);
       setScenes(generatedScenes);
-      toast.success(`${generatedScenes.length} cenas geradas com sucesso!`);
+      
+      // Salvar automaticamente as cenas geradas
+      onSave({ scenes: generatedScenes });
+
+      // Salvar na tabela scenes
+      await supabase
+        .from("scenes")
+        .delete()
+        .eq("project_id", projectId);
+
+      const scenesToInsert = generatedScenes.map((scene: Scene, index: number) => ({
+        project_id: projectId,
+        scene_number: scene.number,
+        order_position: index + 1,
+        int_ext: scene.intExt,
+        location: scene.location,
+        time_of_day: scene.dayNight,
+        description: scene.description,
+        characters: scene.characters,
+        estimated_duration: scene.duration,
+      }));
+
+      const { error: insertError } = await supabase
+        .from("scenes")
+        .insert(scenesToInsert);
+
+      if (insertError) throw insertError;
+
+      toast.success(`${generatedScenes.length} cenas geradas e salvas com sucesso!`);
     } catch (error: any) {
       console.error("Erro ao gerar escaleta:", error);
       toast.error(error.message || "Erro ao gerar escaleta");
@@ -126,8 +154,42 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
     setScenes(newScenes.map((scene, i) => ({ ...scene, number: i + 1 })));
   };
 
-  const handleSave = () => {
-    onSave({ scenes });
+  const handleSave = async () => {
+    try {
+      // Salvar no project_content
+      onSave({ scenes });
+
+      // Também salvar na tabela scenes para o Storyboard e Decupagem
+      // Primeiro, deletar cenas antigas deste projeto
+      await supabase
+        .from("scenes")
+        .delete()
+        .eq("project_id", projectId);
+
+      // Inserir as novas cenas
+      const scenesToInsert = scenes.map((scene, index) => ({
+        project_id: projectId,
+        scene_number: scene.number,
+        order_position: index + 1,
+        int_ext: scene.intExt,
+        location: scene.location,
+        time_of_day: scene.dayNight,
+        description: scene.description,
+        characters: scene.characters,
+        estimated_duration: scene.duration,
+      }));
+
+      const { error } = await supabase
+        .from("scenes")
+        .insert(scenesToInsert);
+
+      if (error) throw error;
+
+      toast.success("Escaleta salva com sucesso!");
+    } catch (error: any) {
+      console.error("Erro ao salvar escaleta:", error);
+      toast.error("Erro ao salvar escaleta na base de dados");
+    }
   };
 
   return (
