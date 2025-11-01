@@ -10,11 +10,11 @@ interface ProjectSidebarProps {
 }
 
 const tabs = [
-  { id: "script", label: "Roteiro", icon: Film },
   { id: "premise", label: "Premissa", icon: FileText },
   { id: "argument", label: "Argumento", icon: BookOpen },
   { id: "storyline", label: "Storyline", icon: ListOrdered },
   { id: "beat_sheet", label: "Escaleta", icon: ScrollText },
+  { id: "script", label: "Roteiro", icon: Film },
   { id: "storyboard", label: "Storyboard", icon: Image },
   { id: "breakdown", label: "Decupagem", icon: Video },
   { id: "budget", label: "Orçamento", icon: DollarSign },

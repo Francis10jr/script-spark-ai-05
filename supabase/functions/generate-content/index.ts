@@ -38,14 +38,8 @@ serve(async (req) => {
         break;
 
       case "beat_sheet":
-        systemPrompt = "Você é um roteirista profissional especializado em criar escaletas detalhadas. Responda APENAS com JSON válido.";
-        userPrompt = `Analise o roteiro COMPLETO abaixo e identifique TODAS as cenas. Para cada cena encontrada no roteiro, crie um item na escaleta. Não limite o número de cenas - crie uma entrada para cada cena que você identificar no roteiro.
-
-Retorne APENAS um array JSON válido de objetos no formato: 
-[{"id": "scene-X", "number": 1, "intExt": "INT" ou "EXT", "location": "nome do local", "dayNight": "DIA" ou "NOITE" ou "ENTARDECER" ou "AMANHECER", "description": "descrição detalhada do que acontece na cena", "characters": ["nome1", "nome2"], "duration": 2}]
-
-Roteiro completo:
-${context.script || ''}`;
+        systemPrompt = "Você é um roteirista profissional especializado em criar escaletas detalhadas.";
+        userPrompt = `Baseado na seguinte storyline, crie uma escaleta com 8-12 cenas. Retorne APENAS um array JSON válido de objetos no formato: [{"id": "scene-X", "number": 1, "intExt": "INT", "location": "nome do local", "dayNight": "DIA", "description": "descrição da cena", "characters": [], "duration": 2}]\n\nStoryline:\nAto 1: ${context.storyline?.acts?.act1}\nAto 2: ${context.storyline?.acts?.act2}\nAto 3: ${context.storyline?.acts?.act3}`;
         break;
 
       case "script":
