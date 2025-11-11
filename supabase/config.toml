@@ -1,1 +1,7 @@
 project_id = "kwurrgfcjyektlonz"
+
+[functions.generate-content]
+verify_jwt = false
+
+[functions.generate-storyboard-image]
+verify_jwt = false

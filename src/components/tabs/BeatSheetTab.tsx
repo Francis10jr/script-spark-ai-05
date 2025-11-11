@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Sparkles, Save, Plus, Trash2, MoveUp, MoveDown } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Scene {
   id: string;
@@ -100,8 +101,42 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
     setScenes(newScenes.map((scene, i) => ({ ...scene, number: i + 1 })));
   };
 
-  const handleSave = () => {
-    onSave({ scenes });
+  const handleSave = async () => {
+    try {
+      // Salvar no project_content (formato JSON)
+      onSave({ scenes });
+
+      // Também salvar na tabela scenes para uso em storyboards e decupagem
+      // Primeiro, deletar cenas existentes
+      await supabase
+        .from("scenes" as any)
+        .delete()
+        .eq("project_id", projectId);
+
+      // Inserir novas cenas
+      const scenesToInsert = scenes.map((scene, index) => ({
+        project_id: projectId,
+        scene_number: scene.number,
+        int_ext: scene.intExt,
+        location: scene.location,
+        time_of_day: scene.dayNight,
+        description: scene.description,
+        characters: scene.characters,
+        estimated_duration: scene.duration,
+        order_position: index + 1,
+      }));
+
+      const { error } = await supabase
+        .from("scenes" as any)
+        .insert(scenesToInsert);
+
+      if (error) {
+        console.error("Erro ao salvar cenas:", error);
+        // Não mostrar erro para o usuário pois o salvamento principal já funcionou
+      }
+    } catch (error) {
+      console.error("Erro ao salvar escaleta:", error);
+    }
   };
 
   return (
