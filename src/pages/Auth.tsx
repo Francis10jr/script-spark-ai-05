@@ -45,7 +45,13 @@ const Auth = () => {
         navigate("/dashboard");
       }
     } catch (error: any) {
-      toast.error(error.message || "Erro ao autenticar");
+      console.error("Erro de autenticação:", error);
+      
+      if (error.message === "Failed to fetch") {
+        toast.error("Erro de conexão com o servidor. Verifique as configurações de URL no backend.");
+      } else {
+        toast.error(error.message || "Erro ao autenticar");
+      }
     } finally {
       setLoading(false);
     }
