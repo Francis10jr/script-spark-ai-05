@@ -11,6 +11,7 @@ import { StorylineTab } from "@/components/tabs/StorylineTab";
 import { BeatSheetTab } from "@/components/tabs/BeatSheetTab";
 import { ScriptTab } from "@/components/tabs/ScriptTab";
 import { StoryboardTab } from "@/components/tabs/StoryboardTab";
+import { TechnicalBreakdownTab } from "@/components/tabs/TechnicalBreakdownTab";
 
 const Project = () => {
   const { id } = useParams();
@@ -156,6 +157,9 @@ const Project = () => {
           )}
           {currentTab === "storyboard" && (
             <StoryboardTab projectId={id!} />
+          )}
+          {currentTab === "breakdown" && (
+            <TechnicalBreakdownTab projectId={id!} />
           )}
         </main>
       </div>

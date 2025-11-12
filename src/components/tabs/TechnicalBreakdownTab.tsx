@@ -1,0 +1,429 @@
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { Plus, Trash2, Save, Video } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Shot {
+  id: string;
+  shot_number: string;
+  shot_type: string;
+  framing: string;
+  movement: string;
+  lens: string;
+  equipment: string[];
+  lighting_setup: string;
+  sound_notes: string;
+  vfx_notes: string;
+  notes: string;
+  estimated_setup_time: number;
+}
+
+interface Scene {
+  id: string;
+  scene_number: number;
+  int_ext: string;
+  location: string;
+  time_of_day: string;
+  description: string;
+  shots: Shot[];
+}
+
+interface TechnicalBreakdownTabProps {
+  projectId: string;
+}
+
+export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps) => {
+  const [scenes, setScenes] = useState<Scene[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadScenes();
+  }, [projectId]);
+
+  const loadScenes = async () => {
+    try {
+      const { data: scenesData, error: scenesError } = await supabase
+        .from("scenes" as any)
+        .select("*")
+        .eq("project_id", projectId)
+        .order("order_position");
+
+      if (scenesError) throw scenesError;
+
+      const { data: breakdownData, error: breakdownError } = await supabase
+        .from("technical_breakdown" as any)
+        .select("*")
+        .in("scene_id", scenesData?.map((s: any) => s.id) || []);
+
+      if (breakdownError) throw breakdownError;
+
+      const scenesWithShots = scenesData?.map((scene: any) => ({
+        ...scene,
+        shots: breakdownData?.filter((b: any) => b.scene_id === scene.id).map((b: any) => ({
+          id: b.id,
+          shot_number: b.shot_number || "",
+          shot_type: b.shot_type || "",
+          framing: b.framing || "",
+          movement: b.movement || "",
+          lens: b.lens || "",
+          equipment: b.equipment || [],
+          lighting_setup: b.lighting_setup || "",
+          sound_notes: b.sound_notes || "",
+          vfx_notes: b.vfx_notes || "",
+          notes: b.notes || "",
+          estimated_setup_time: b.estimated_setup_time || 0,
+        })) || [],
+      })) || [];
+
+      setScenes(scenesWithShots);
+    } catch (error) {
+      console.error("Erro ao carregar cenas:", error);
+      toast.error("Erro ao carregar decupagem");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addShot = (sceneId: string) => {
+    setScenes(scenes.map(scene => {
+      if (scene.id === sceneId) {
+        const newShot: Shot = {
+          id: `shot-${Date.now()}`,
+          shot_number: `${scene.scene_number}.${scene.shots.length + 1}`,
+          shot_type: "",
+          framing: "",
+          movement: "",
+          lens: "",
+          equipment: [],
+          lighting_setup: "",
+          sound_notes: "",
+          vfx_notes: "",
+          notes: "",
+          estimated_setup_time: 0,
+        };
+        return { ...scene, shots: [...scene.shots, newShot] };
+      }
+      return scene;
+    }));
+  };
+
+  const updateShot = (sceneId: string, shotId: string, updates: Partial<Shot>) => {
+    setScenes(scenes.map(scene => {
+      if (scene.id === sceneId) {
+        return {
+          ...scene,
+          shots: scene.shots.map(shot => 
+            shot.id === shotId ? { ...shot, ...updates } : shot
+          ),
+        };
+      }
+      return scene;
+    }));
+  };
+
+  const deleteShot = async (sceneId: string, shotId: string) => {
+    try {
+      if (!shotId.startsWith("shot-")) {
+        const { error } = await supabase
+          .from("technical_breakdown" as any)
+          .delete()
+          .eq("id", shotId);
+
+        if (error) throw error;
+      }
+
+      setScenes(scenes.map(scene => {
+        if (scene.id === sceneId) {
+          return {
+            ...scene,
+            shots: scene.shots.filter(shot => shot.id !== shotId),
+          };
+        }
+        return scene;
+      }));
+
+      toast.success("Plano removido");
+    } catch (error) {
+      console.error("Erro ao remover plano:", error);
+      toast.error("Erro ao remover plano");
+    }
+  };
+
+  const saveShot = async (sceneId: string, shot: Shot) => {
+    try {
+      const shotData = {
+        scene_id: sceneId,
+        shot_number: shot.shot_number,
+        shot_type: shot.shot_type,
+        framing: shot.framing,
+        movement: shot.movement,
+        lens: shot.lens,
+        equipment: shot.equipment,
+        lighting_setup: shot.lighting_setup,
+        sound_notes: shot.sound_notes,
+        vfx_notes: shot.vfx_notes,
+        notes: shot.notes,
+        estimated_setup_time: shot.estimated_setup_time,
+      };
+
+      if (shot.id.startsWith("shot-")) {
+        const { error } = await supabase
+          .from("technical_breakdown" as any)
+          .insert(shotData);
+
+        if (error) throw error;
+        
+        await loadScenes();
+      } else {
+        const { error } = await supabase
+          .from("technical_breakdown" as any)
+          .update(shotData)
+          .eq("id", shot.id);
+
+        if (error) throw error;
+      }
+
+      toast.success("Plano salvo");
+    } catch (error) {
+      console.error("Erro ao salvar plano:", error);
+      toast.error("Erro ao salvar plano");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (scenes.length === 0) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <Card>
+          <CardHeader>
+            <CardTitle>Decupagem Técnica</CardTitle>
+            <CardDescription>
+              Nenhuma cena encontrada. Crie uma escaleta primeiro.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Decupagem Técnica</CardTitle>
+          <CardDescription>
+            Planeje os planos e detalhes técnicos de cada cena
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Accordion type="multiple" className="space-y-4">
+            {scenes.map((scene) => (
+              <AccordionItem key={scene.id} value={scene.id}>
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex items-center gap-3 flex-1 text-left">
+                    <Badge variant="outline">Cena {scene.scene_number}</Badge>
+                    <span className="font-semibold">{scene.int_ext}</span>
+                    <span>{scene.location}</span>
+                    <Badge variant="secondary">{scene.time_of_day}</Badge>
+                    <Badge variant="outline">{scene.shots.length} planos</Badge>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-4 pt-4">
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-muted-foreground">{scene.description}</p>
+                      <Button
+                        onClick={() => addShot(scene.id)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Novo Plano
+                      </Button>
+                    </div>
+
+                    {scene.shots.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        Nenhum plano criado. Adicione o primeiro plano.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {scene.shots.map((shot) => (
+                          <Card key={shot.id}>
+                            <CardHeader>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Video className="w-4 h-4" />
+                                  <CardTitle className="text-base">
+                                    Plano {shot.shot_number}
+                                  </CardTitle>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    onClick={() => saveShot(scene.id, shot)}
+                                    size="sm"
+                                    variant="outline"
+                                  >
+                                    <Save className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    onClick={() => deleteShot(scene.id, shot.id)}
+                                    size="sm"
+                                    variant="ghost"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-sm font-medium">Número do Plano</label>
+                                  <Input
+                                    value={shot.shot_number}
+                                    onChange={(e) => updateShot(scene.id, shot.id, { shot_number: e.target.value })}
+                                    placeholder="Ex: 1.1"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Tipo de Plano</label>
+                                  <Select
+                                    value={shot.shot_type}
+                                    onValueChange={(value) => updateShot(scene.id, shot.id, { shot_type: value })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="GPG">GPG - Grande Plano Geral</SelectItem>
+                                      <SelectItem value="PG">PG - Plano Geral</SelectItem>
+                                      <SelectItem value="PA">PA - Plano Americano</SelectItem>
+                                      <SelectItem value="PM">PM - Plano Médio</SelectItem>
+                                      <SelectItem value="PP">PP - Primeiro Plano</SelectItem>
+                                      <SelectItem value="PPP">PPP - Primeiríssimo Plano</SelectItem>
+                                      <SelectItem value="Detalhe">Detalhe</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-sm font-medium">Enquadramento</label>
+                                  <Input
+                                    value={shot.framing}
+                                    onChange={(e) => updateShot(scene.id, shot.id, { framing: e.target.value })}
+                                    placeholder="Ex: Frontal, Contra-plongée"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Movimento de Câmera</label>
+                                  <Input
+                                    value={shot.movement}
+                                    onChange={(e) => updateShot(scene.id, shot.id, { movement: e.target.value })}
+                                    placeholder="Ex: Travelling, Pan, Fixa"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-sm font-medium">Lente</label>
+                                  <Input
+                                    value={shot.lens}
+                                    onChange={(e) => updateShot(scene.id, shot.id, { lens: e.target.value })}
+                                    placeholder="Ex: 50mm, 24mm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Tempo de Setup (min)</label>
+                                  <Input
+                                    type="number"
+                                    value={shot.estimated_setup_time}
+                                    onChange={(e) => updateShot(scene.id, shot.id, { estimated_setup_time: parseInt(e.target.value) || 0 })}
+                                    placeholder="Ex: 30"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-sm font-medium">Equipamentos</label>
+                                <Input
+                                  value={shot.equipment.join(", ")}
+                                  onChange={(e) => updateShot(scene.id, shot.id, { 
+                                    equipment: e.target.value.split(",").map(s => s.trim()).filter(Boolean) 
+                                  })}
+                                  placeholder="Separe por vírgula: Steadicam, Dolly, Grua"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-sm font-medium">Iluminação</label>
+                                <Textarea
+                                  value={shot.lighting_setup}
+                                  onChange={(e) => updateShot(scene.id, shot.id, { lighting_setup: e.target.value })}
+                                  placeholder="Descreva o setup de iluminação..."
+                                  rows={2}
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-sm font-medium">Notas de Som</label>
+                                  <Textarea
+                                    value={shot.sound_notes}
+                                    onChange={(e) => updateShot(scene.id, shot.id, { sound_notes: e.target.value })}
+                                    placeholder="Observações sobre captação de som..."
+                                    rows={2}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Notas de VFX</label>
+                                  <Textarea
+                                    value={shot.vfx_notes}
+                                    onChange={(e) => updateShot(scene.id, shot.id, { vfx_notes: e.target.value })}
+                                    placeholder="Efeitos visuais necessários..."
+                                    rows={2}
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-sm font-medium">Observações Gerais</label>
+                                <Textarea
+                                  value={shot.notes}
+                                  onChange={(e) => updateShot(scene.id, shot.id, { notes: e.target.value })}
+                                  placeholder="Outras anotações importantes..."
+                                  rows={2}
+                                />
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
