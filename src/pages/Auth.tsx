@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,25 @@ import { Film } from "lucide-react";
 
 const Auth = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [isResetPassword, setIsResetPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  useEffect(() => {
+    const resetParam = searchParams.get('reset');
+    if (resetParam === 'true') {
+      setIsResetPassword(true);
+      setIsForgotPassword(false);
+      setIsLogin(false);
+    }
+  }, [searchParams]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +92,45 @@ const Auth = () => {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      toast.error("As senhas não coincidem");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error("A senha deve ter pelo menos 6 caracteres");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) throw error;
+      
+      toast.success("Senha redefinida com sucesso!");
+      navigate("/dashboard");
+    } catch (error: any) {
+      console.error("Erro ao redefinir senha:", error);
+      
+      if (error.message.includes("Token")) {
+        toast.error("Link de recuperação expirado. Solicite um novo email de recuperação.");
+        setIsResetPassword(false);
+        setIsForgotPassword(true);
+      } else {
+        toast.error(error.message || "Erro ao redefinir senha");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
       <Card className="w-full max-w-md shadow-lg">
@@ -87,14 +139,18 @@ const Auth = () => {
             <Film className="w-6 h-6 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">
-            {isForgotPassword
+            {isResetPassword
+              ? "Redefinir senha"
+              : isForgotPassword
               ? "Recuperar senha"
               : isLogin
               ? "Bem-vindo de volta"
               : "Criar conta"}
           </CardTitle>
           <CardDescription>
-            {isForgotPassword
+            {isResetPassword
+              ? "Digite sua nova senha"
+              : isForgotPassword
               ? "Digite seu email para receber instruções"
               : isLogin
               ? "Entre com suas credenciais"
@@ -102,7 +158,41 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isForgotPassword ? (
+          {isResetPassword ? (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">Nova senha</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar nova senha</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
+                disabled={loading}
+              >
+                {loading ? "Redefinindo..." : "Redefinir senha"}
+              </Button>
+            </form>
+          ) : isForgotPassword ? (
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
