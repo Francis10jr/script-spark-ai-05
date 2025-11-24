@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Sparkles, Save, FileDown } from "lucide-react";
+import { Sparkles, Save, FileDown, Upload, FileText, Loader2, X } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import mammoth from "mammoth";
+import * as pdfjsLib from "pdfjs-dist";
 
 interface ScriptTabProps {
   content: any;
@@ -17,7 +19,15 @@ interface ScriptTabProps {
 export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabProps) => {
   const [text, setText] = useState(content?.text || "");
   const [generating, setGenerating] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [source, setSource] = useState<"ai" | "upload" | null>(content?.source || null);
+  const [fileName, setFileName] = useState<string | null>(content?.fileName || null);
   const printRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Configure PDF.js worker
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
   const handleGenerate = async () => {
     if (!beatSheet?.scenes || beatSheet.scenes.length === 0) {
@@ -46,6 +56,8 @@ export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabPr
       
       const data = await response.json();
       setText(data.content);
+      setSource("ai");
+      setFileName(null);
       toast.success("Roteiro gerado!");
     } catch (error) {
       toast.error("Erro ao gerar roteiro");
@@ -55,7 +67,101 @@ export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabPr
   };
 
   const handleSave = () => {
-    onSave({ text });
+    onSave({ text, source, fileName });
+  };
+
+  const handleFileSelect = async (file: File) => {
+    // Validate file size (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Arquivo muito grande. Máximo: 10MB");
+      return;
+    }
+
+    // Validate file type
+    const validExtensions = [".pdf", ".docx", ".txt", ".fountain"];
+    const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
+    if (!validExtensions.includes(fileExtension)) {
+      toast.error("Formato não suportado. Use: PDF, DOCX, TXT ou Fountain");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      let extractedText = "";
+
+      if (fileExtension === ".pdf") {
+        extractedText = await extractTextFromPDF(file);
+      } else if (fileExtension === ".docx") {
+        extractedText = await extractTextFromDOCX(file);
+      } else {
+        // TXT or Fountain
+        extractedText = await file.text();
+      }
+
+      setText(extractedText);
+      setSource("upload");
+      setFileName(file.name);
+      toast.success("Roteiro carregado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao processar arquivo:", error);
+      toast.error("Erro ao processar arquivo");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const extractTextFromPDF = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = "";
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(" ");
+      fullText += pageText + "\n\n";
+    }
+
+    return fullText;
+  };
+
+  const extractTextFromDOCX = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  };
+
+  const handleReset = () => {
+    setText("");
+    setSource(null);
+    setFileName(null);
   };
 
   const handleExportPDF = async () => {
@@ -111,48 +217,166 @@ export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabPr
       </div>
 
       <div className="max-w-4xl mx-auto space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Roteiro Completo</CardTitle>
-            <CardDescription>
-              Roteiro formatado profissionalmente com cenas, diálogos e descrições
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Seu roteiro completo será gerado aqui..."
-              rows={25}
-              className="resize-none font-mono text-sm"
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                Aproximadamente {estimatedPages} página{estimatedPages !== 1 ? 's' : ''}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleGenerate}
-                  disabled={generating}
-                  className="bg-gradient-to-r from-primary to-secondary"
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  {generating ? "Gerando..." : "Gerar Roteiro Completo com IA"}
+        {!text ? (
+          // Estado vazio - mostrar opções lado a lado
+          <div className="space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-2">Escolha como criar seu roteiro</h2>
+              <p className="text-muted-foreground">Gere automaticamente com IA ou faça upload do seu roteiro pronto</p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Opção 1: Gerar com IA */}
+              <Card className="border-2 hover:border-primary transition-colors cursor-pointer">
+                <CardHeader>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-6 h-6 text-primary" />
+                    <CardTitle>Gerar com IA</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Crie um roteiro automaticamente baseado na sua escaleta
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-sm text-muted-foreground">
+                    A IA irá gerar um roteiro completo com cenas, diálogos e descrições profissionais.
+                  </div>
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={generating || !beatSheet?.scenes || beatSheet.scenes.length === 0}
+                    className="w-full bg-gradient-to-r from-primary to-secondary"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    {generating ? "Gerando..." : "Gerar Roteiro com IA"}
+                  </Button>
+                  {(!beatSheet?.scenes || beatSheet.scenes.length === 0) && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Crie uma escaleta primeiro para gerar o roteiro
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Opção 2: Upload de Roteiro */}
+              <Card className="border-2 hover:border-primary transition-colors">
+                <CardHeader>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Upload className="w-6 h-6 text-primary" />
+                    <CardTitle>Fazer Upload do Roteiro</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Já tem um roteiro pronto? Faça upload aqui
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx,.txt,.fountain"
+                    onChange={handleFileInputChange}
+                    className="hidden"
+                  />
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                      isDragging
+                        ? "border-primary bg-primary/5"
+                        : "border-muted-foreground/25 hover:border-primary/50"
+                    }`}
+                  >
+                    {uploading ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        <p className="text-sm">Processando arquivo...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+                        <p className="font-medium mb-1">
+                          Arraste seu arquivo aqui ou clique para selecionar
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Formatos: PDF, DOCX, TXT, Fountain | Máx: 10MB
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        ) : (
+          // Estado com roteiro - mostrar editor
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Roteiro Completo</CardTitle>
+                  <CardDescription>
+                    Roteiro formatado profissionalmente com cenas, diálogos e descrições
+                  </CardDescription>
+                </div>
+                <Button variant="ghost" size="icon" onClick={handleReset}>
+                  <X className="w-4 h-4" />
                 </Button>
-                <Button onClick={handleSave} variant="outline">
-                  <Save className="w-4 h-4 mr-2" />
-                  Salvar
-                </Button>
-                {text && (
+              </div>
+              {/* Tag de origem */}
+              {source && (
+                <div className="mt-2">
+                  <span
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                      source === "ai"
+                        ? "bg-primary/10 text-primary"
+                        : "bg-secondary/10 text-secondary-foreground"
+                    }`}
+                  >
+                    {source === "ai" ? (
+                      <>
+                        <Sparkles className="w-3 h-3" />
+                        Gerado por IA
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="w-3 h-3" />
+                        Upload: {fileName}
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Seu roteiro completo será gerado aqui..."
+                rows={25}
+                className="resize-none font-mono text-sm"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Aproximadamente {estimatedPages} página{estimatedPages !== 1 ? 's' : ''}
+                </span>
+                <div className="flex gap-2">
+                  <Button onClick={handleSave} variant="outline">
+                    <Save className="w-4 h-4 mr-2" />
+                    Salvar
+                  </Button>
                   <Button variant="ghost" onClick={handleExportPDF}>
                     <FileDown className="w-4 h-4 mr-2" />
                     Exportar PDF
                   </Button>
-                )}
+                  <Button variant="outline" onClick={handleReset}>
+                    Substituir Roteiro
+                  </Button>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </>
   );
