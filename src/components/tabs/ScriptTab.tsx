@@ -128,7 +128,7 @@ export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabPr
           time_of_day: scene.dayNight,
           description: scene.description,
           characters: scene.characters || [],
-          estimated_duration: scene.duration,
+          estimated_duration: Math.round(scene.duration || 2),
           order_position: index + 1,
         }));
 
