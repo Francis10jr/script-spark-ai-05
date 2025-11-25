@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ProjectSidebar } from "@/components/ProjectSidebar";
+import { WorkflowSelector } from "@/components/WorkflowSelector";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { PremiseTab } from "@/components/tabs/PremiseTab";
@@ -17,7 +18,7 @@ const Project = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
-  const [currentTab, setCurrentTab] = useState("premise");
+  const [currentTab, setCurrentTab] = useState<string>("");
   const [content, setContent] = useState<any>({});
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +36,12 @@ const Project = () => {
 
       if (projectError) throw projectError;
       setProject(projectData);
+
+      // Define tab inicial baseado no workflow
+      if (projectData.workflow_type) {
+        const initialTab = projectData.workflow_type === "upload" ? "script" : "premise";
+        setCurrentTab(initialTab);
+      }
 
       const { data: contentData, error: contentError } = await supabase
         .from("project_content")
@@ -54,6 +61,23 @@ const Project = () => {
       navigate("/dashboard");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleWorkflowSelect = async (type: "ai" | "upload") => {
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .update({ workflow_type: type })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setProject((prev: any) => ({ ...prev, workflow_type: type }));
+      setCurrentTab(type === "upload" ? "script" : "premise");
+      toast.success("Workflow selecionado!");
+    } catch (error: any) {
+      toast.error("Erro ao salvar workflow");
     }
   };
 
@@ -94,6 +118,11 @@ const Project = () => {
     (key) => content[key]?.text || content[key]?.scenes || content[key]?.acts
   );
 
+  // Mostrar seletor de workflow se ainda não escolheu
+  if (!loading && !project?.workflow_type) {
+    return <WorkflowSelector onSelect={handleWorkflowSelect} />;
+  }
+
   return (
     <div className="min-h-screen flex">
       <ProjectSidebar
@@ -101,6 +130,7 @@ const Project = () => {
         onTabChange={setCurrentTab}
         projectTitle={project?.title || "Projeto"}
         completedSteps={completedSteps}
+        workflowType={project?.workflow_type}
       />
       <div className="flex-1 flex flex-col">
         <header className="border-b bg-card/50 backdrop-blur-sm px-6 py-4">
