@@ -8,6 +8,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import mammoth from "mammoth";
 import * as pdfjsLib from "pdfjs-dist";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ScriptTabProps {
   content: any;
@@ -66,8 +67,83 @@ export const ScriptTab = ({ content, onSave, projectId, beatSheet }: ScriptTabPr
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     onSave({ text, source, fileName });
+    toast.success("Roteiro salvo!");
+
+    // Se foi upload, gerar automaticamente escaleta para popular scenes
+    if (source === 'upload') {
+      toast.info("Gerando escaleta automaticamente a partir do roteiro...");
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-content`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({
+              type: "beat_sheet",
+              context: { script: text },
+            }),
+          }
+        );
+
+        if (!response.ok) throw new Error("Erro na geração da escaleta");
+        
+        const data = await response.json();
+        let generatedScenes = data.content;
+        
+        // Remove markdown code blocks se existirem
+        if (typeof generatedScenes === 'string') {
+          generatedScenes = generatedScenes.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          generatedScenes = JSON.parse(generatedScenes);
+        }
+
+        // Salvar escaleta no project_content
+        const { error: contentError } = await supabase
+          .from("project_content")
+          .upsert({
+            project_id: projectId,
+            content_type: "beat_sheet",
+            content: { scenes: generatedScenes },
+          }, {
+            onConflict: 'project_id,content_type'
+          });
+
+        if (contentError) throw contentError;
+
+        // Popular tabela scenes
+        await supabase
+          .from("scenes")
+          .delete()
+          .eq("project_id", projectId);
+
+        const scenesToInsert = generatedScenes.map((scene: any, index: number) => ({
+          project_id: projectId,
+          scene_number: scene.number,
+          int_ext: scene.intExt,
+          location: scene.location,
+          time_of_day: scene.dayNight,
+          description: scene.description,
+          characters: scene.characters || [],
+          estimated_duration: scene.duration,
+          order_position: index + 1,
+        }));
+
+        const { error: scenesError } = await supabase
+          .from("scenes")
+          .insert(scenesToInsert);
+
+        if (scenesError) throw scenesError;
+
+        toast.success("Escaleta gerada! Agora você pode criar storyboards e decupagem.");
+      } catch (error) {
+        console.error("Erro ao gerar escaleta:", error);
+        toast.error("Erro ao gerar escaleta automaticamente. Você pode gerá-la manualmente na aba Escaleta.");
+      }
+    }
   };
 
   const handleFileSelect = async (file: File) => {
