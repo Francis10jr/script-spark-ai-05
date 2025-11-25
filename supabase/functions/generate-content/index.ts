@@ -41,10 +41,12 @@ serve(async (req) => {
         systemPrompt = "Você é um roteirista profissional especializado em criar escaletas detalhadas a partir de roteiros.";
         if (context.script) {
           // Geração a partir do roteiro completo
-          userPrompt = `Analise o seguinte roteiro completo e extraia TODAS as cenas dele em formato de escaleta. Identifique cada cena, seu número, se é INT/EXT, o local, período do dia (DIA/NOITE/etc), descrição do que acontece, personagens envolvidos e duração estimada em minutos. Retorne APENAS um array JSON válido de objetos no formato: [{"id": "scene-X", "number": 1, "intExt": "INT", "location": "nome do local", "dayNight": "DIA", "description": "descrição resumida da ação", "characters": ["personagem1", "personagem2"], "duration": 2}]\n\nIMPORTANTE: Extraia TODAS as cenas do roteiro, não limite a 8-12. Se o roteiro tem 19 cenas, retorne 19. Se tem 8, retorne 8.\n\nRoteiro:\n${context.script}`;
+          userPrompt = `Analise o seguinte roteiro completo e extraia TODAS as cenas dele em formato de escaleta. Identifique cada cena, seu número, se é INT/EXT, o local, período do dia (DIA/NOITE/etc), descrição do que acontece, personagens envolvidos e duração estimada em minutos (SEMPRE USE NÚMEROS INTEIROS para duration, nunca decimais). Retorne APENAS um array JSON válido de objetos no formato: [{"id": "scene-X", "number": 1, "intExt": "INT", "location": "nome do local", "dayNight": "DIA", "description": "descrição resumida da ação", "characters": ["personagem1", "personagem2"], "duration": 2}]\n\nIMPORTANTE: 
+- Extraia TODAS as cenas do roteiro, não limite a 8-12. Se o roteiro tem 19 cenas, retorne 19. Se tem 8, retorne 8.
+- O campo "duration" DEVE ser sempre um número inteiro (1, 2, 3, 4, 5, etc), NUNCA use decimais como 0.5 ou 1.5.\n\nRoteiro:\n${context.script}`;
         } else {
           // Geração a partir da storyline
-          userPrompt = `Baseado na seguinte storyline, crie uma escaleta com 8-12 cenas. Retorne APENAS um array JSON válido de objetos no formato: [{"id": "scene-X", "number": 1, "intExt": "INT", "location": "nome do local", "dayNight": "DIA", "description": "descrição da cena", "characters": [], "duration": 2}]\n\nStoryline:\nAto 1: ${context.storyline?.acts?.act1}\nAto 2: ${context.storyline?.acts?.act2}\nAto 3: ${context.storyline?.acts?.act3}`;
+          userPrompt = `Baseado na seguinte storyline, crie uma escaleta com 8-12 cenas. Retorne APENAS um array JSON válido de objetos no formato: [{"id": "scene-X", "number": 1, "intExt": "INT", "location": "nome do local", "dayNight": "DIA", "description": "descrição da cena", "characters": [], "duration": 2}]\n\nIMPORTANTE: O campo "duration" DEVE ser sempre um número inteiro (1, 2, 3, 4, 5, etc), NUNCA use decimais.\n\nStoryline:\nAto 1: ${context.storyline?.acts?.act1}\nAto 2: ${context.storyline?.acts?.act2}\nAto 3: ${context.storyline?.acts?.act3}`;
         }
         break;
 
