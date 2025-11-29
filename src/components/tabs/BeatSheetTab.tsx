@@ -58,7 +58,16 @@ export const BeatSheetTab = ({ content, onSave, projectId, storyline }: BeatShee
       if (!response.ok) throw new Error("Erro na geração");
       
       const data = await response.json();
-      const generatedScenes = JSON.parse(data.content);
+      
+      // Remove markdown code blocks se existirem
+      let cleanContent = data.content.trim();
+      if (cleanContent.startsWith("```json")) {
+        cleanContent = cleanContent.replace(/^```json\s*\n/, "").replace(/\n```\s*$/, "");
+      } else if (cleanContent.startsWith("```")) {
+        cleanContent = cleanContent.replace(/^```\s*\n/, "").replace(/\n```\s*$/, "");
+      }
+      
+      const generatedScenes = JSON.parse(cleanContent);
       setScenes(generatedScenes);
       toast.success("Escaleta gerada!");
     } catch (error) {
