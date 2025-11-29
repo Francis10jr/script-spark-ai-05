@@ -11,9 +11,10 @@ interface StorylineTabProps {
   projectId: string;
   premise?: string;
   argument?: string;
+  script?: string;
 }
 
-export const StorylineTab = ({ content, onSave, projectId, premise, argument }: StorylineTabProps) => {
+export const StorylineTab = ({ content, onSave, projectId, premise, argument, script }: StorylineTabProps) => {
   const [acts, setActs] = useState({
     act1: content?.acts?.act1 || "",
     act2: content?.acts?.act2 || "",
@@ -22,8 +23,8 @@ export const StorylineTab = ({ content, onSave, projectId, premise, argument }: 
   const [generating, setGenerating] = useState(false);
 
   const handleGenerate = async () => {
-    if (!premise && !argument) {
-      toast.error("Crie uma premissa ou argumento primeiro");
+    if (!premise && !argument && !script) {
+      toast.error("Crie uma premissa/argumento primeiro ou tenha um roteiro salvo");
       return;
     }
     
@@ -39,7 +40,7 @@ export const StorylineTab = ({ content, onSave, projectId, premise, argument }: 
           },
           body: JSON.stringify({
             type: "storyline",
-            context: { premise, argument },
+            context: { premise, argument, script },
           }),
         }
       );

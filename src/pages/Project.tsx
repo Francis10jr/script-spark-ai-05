@@ -150,6 +150,7 @@ const Project = () => {
               content={content.premise}
               onSave={(data) => saveContent("premise", data)}
               projectId={id!}
+              script={content.script?.text}
             />
           )}
           {currentTab === "argument" && (
@@ -158,6 +159,7 @@ const Project = () => {
               onSave={(data) => saveContent("argument", data)}
               projectId={id!}
               premise={content.premise?.text}
+              script={content.script?.text}
             />
           )}
           {currentTab === "storyline" && (
@@ -167,6 +169,7 @@ const Project = () => {
               projectId={id!}
               premise={content.premise?.text}
               argument={content.argument?.text}
+              script={content.script?.text}
             />
           )}
           {currentTab === "beat_sheet" && (

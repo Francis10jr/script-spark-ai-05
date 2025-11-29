@@ -10,15 +10,16 @@ interface ArgumentTabProps {
   onSave: (data: any) => void;
   projectId: string;
   premise?: string;
+  script?: string;
 }
 
-export const ArgumentTab = ({ content, onSave, projectId, premise }: ArgumentTabProps) => {
+export const ArgumentTab = ({ content, onSave, projectId, premise, script }: ArgumentTabProps) => {
   const [text, setText] = useState(content?.text || "");
   const [generating, setGenerating] = useState(false);
 
   const handleGenerate = async () => {
-    if (!premise) {
-      toast.error("Crie uma premissa primeiro");
+    if (!premise && !script) {
+      toast.error("Crie uma premissa primeiro ou tenha um roteiro salvo");
       return;
     }
     
@@ -34,7 +35,7 @@ export const ArgumentTab = ({ content, onSave, projectId, premise }: ArgumentTab
           },
           body: JSON.stringify({
             type: "argument",
-            context: { premise },
+            context: { premise, script },
           }),
         }
       );
