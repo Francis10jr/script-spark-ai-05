@@ -9,9 +9,10 @@ interface PremiseTabProps {
   content: any;
   onSave: (data: any) => void;
   projectId: string;
+  script?: string;
 }
 
-export const PremiseTab = ({ content, onSave, projectId }: PremiseTabProps) => {
+export const PremiseTab = ({ content, onSave, projectId, script }: PremiseTabProps) => {
   const [text, setText] = useState(content?.text || "");
   const [generating, setGenerating] = useState(false);
 
@@ -28,7 +29,7 @@ export const PremiseTab = ({ content, onSave, projectId }: PremiseTabProps) => {
           },
           body: JSON.stringify({
             type: "premise",
-            context: {},
+            context: { script },
           }),
         }
       );

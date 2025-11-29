@@ -24,17 +24,29 @@ serve(async (req) => {
     switch (type) {
       case "premise":
         systemPrompt = "Você é um roteirista profissional especializado em criar premissas cinematográficas impactantes.";
-        userPrompt = "Crie uma premissa original e envolvente para um projeto audiovisual em 2-3 linhas. A premissa deve apresentar o protagonista, o conflito central e o que torna a história única. Seja criativo e específico.";
+        if (context.script) {
+          userPrompt = `Analise o seguinte roteiro completo e extraia a premissa em 2-3 linhas. A premissa deve apresentar o protagonista, o conflito central e o que torna a história única.\n\nRoteiro:\n${context.script}`;
+        } else {
+          userPrompt = "Crie uma premissa original e envolvente para um projeto audiovisual em 2-3 linhas. A premissa deve apresentar o protagonista, o conflito central e o que torna a história única. Seja criativo e específico.";
+        }
         break;
 
       case "argument":
         systemPrompt = "Você é um roteirista profissional especializado em desenvolver argumentos narrativos completos.";
-        userPrompt = `Expanda a seguinte premissa em um argumento completo de aproximadamente 300-400 palavras. Desenvolva os personagens principais, a estrutura narrativa básica (apresentação, desenvolvimento, clímax, resolução) e os temas centrais da história.\n\nPremissa: ${context.premise}`;
+        if (context.script) {
+          userPrompt = `Analise o seguinte roteiro completo e extraia/sintetize o argumento em aproximadamente 300-400 palavras. Desenvolva os personagens principais, a estrutura narrativa básica (apresentação, desenvolvimento, clímax, resolução) e os temas centrais da história.\n\nRoteiro:\n${context.script}`;
+        } else {
+          userPrompt = `Expanda a seguinte premissa em um argumento completo de aproximadamente 300-400 palavras. Desenvolva os personagens principais, a estrutura narrativa básica (apresentação, desenvolvimento, clímax, resolução) e os temas centrais da história.\n\nPremissa: ${context.premise}`;
+        }
         break;
 
       case "storyline":
         systemPrompt = "Você é um roteirista profissional especializado em estruturação narrativa em três atos.";
-        userPrompt = `Baseado no seguinte contexto, crie uma storyline estruturada em três atos. Retorne APENAS um objeto JSON válido no formato: {"act1": "texto do ato 1", "act2": "texto do ato 2", "act3": "texto do ato 3"}. Cada ato deve ter pelo menos 100 palavras.\n\nContexto:\nPremissa: ${context.premise}\nArgumento: ${context.argument}`;
+        if (context.script) {
+          userPrompt = `Analise o seguinte roteiro completo e estruture uma storyline em três atos. Retorne APENAS um objeto JSON válido no formato: {"act1": "texto do ato 1", "act2": "texto do ato 2", "act3": "texto do ato 3"}. Cada ato deve ter pelo menos 100 palavras descrevendo o que acontece no roteiro.\n\nRoteiro:\n${context.script}`;
+        } else {
+          userPrompt = `Baseado no seguinte contexto, crie uma storyline estruturada em três atos. Retorne APENAS um objeto JSON válido no formato: {"act1": "texto do ato 1", "act2": "texto do ato 2", "act3": "texto do ato 3"}. Cada ato deve ter pelo menos 100 palavras.\n\nContexto:\nPremissa: ${context.premise}\nArgumento: ${context.argument}`;
+        }
         break;
 
       case "beat_sheet":
