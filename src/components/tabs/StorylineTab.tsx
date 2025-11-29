@@ -48,7 +48,16 @@ export const StorylineTab = ({ content, onSave, projectId, premise, argument, sc
       if (!response.ok) throw new Error("Erro na geração");
       
       const data = await response.json();
-      const generatedActs = JSON.parse(data.content);
+      
+      // Remove markdown code blocks se existirem
+      let cleanContent = data.content.trim();
+      if (cleanContent.startsWith("```json")) {
+        cleanContent = cleanContent.replace(/^```json\s*\n/, "").replace(/\n```\s*$/, "");
+      } else if (cleanContent.startsWith("```")) {
+        cleanContent = cleanContent.replace(/^```\s*\n/, "").replace(/\n```\s*$/, "");
+      }
+      
+      const generatedActs = JSON.parse(cleanContent);
       setActs(generatedActs);
       toast.success("Storyline gerada!");
     } catch (error) {
