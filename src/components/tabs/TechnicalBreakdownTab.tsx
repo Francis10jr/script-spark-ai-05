@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, Video } from "lucide-react";
+import { Plus, Trash2, Save, Video, Sparkles } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -197,6 +197,59 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
     }
   };
 
+  const generateShotsWithAI = async (scene: Scene) => {
+    try {
+      toast.loading("Gerando decupagem com IA...");
+      
+      const { data, error } = await supabase.functions.invoke("generate-content", {
+        body: {
+          type: "technical_breakdown",
+          context: {
+            scene_number: scene.scene_number,
+            int_ext: scene.int_ext,
+            location: scene.location,
+            time_of_day: scene.time_of_day,
+            description: scene.description,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      const generatedShots = JSON.parse(data.content);
+      
+      // Salva os planos gerados no banco
+      const shotsToInsert = generatedShots.map((shot: any) => ({
+        scene_id: scene.id,
+        shot_number: shot.shot_number,
+        shot_type: shot.shot_type,
+        framing: shot.framing,
+        movement: shot.movement,
+        lens: shot.lens,
+        equipment: shot.equipment,
+        lighting_setup: shot.lighting_setup,
+        sound_notes: shot.sound_notes,
+        vfx_notes: shot.vfx_notes,
+        notes: shot.notes,
+        estimated_setup_time: shot.estimated_setup_time,
+      }));
+
+      const { error: insertError } = await supabase
+        .from("technical_breakdown" as any)
+        .insert(shotsToInsert);
+
+      if (insertError) throw insertError;
+
+      await loadScenes();
+      toast.success(`${generatedShots.length} planos gerados com sucesso!`);
+    } catch (error) {
+      console.error("Erro ao gerar decupagem:", error);
+      toast.error("Erro ao gerar decupagem com IA");
+    } finally {
+      toast.dismiss();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -246,14 +299,26 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
                   <div className="space-y-4 pt-4">
                     <div className="flex justify-between items-center">
                       <p className="text-sm text-muted-foreground">{scene.description}</p>
-                      <Button
-                        onClick={() => addShot(scene.id)}
-                        size="sm"
-                        variant="outline"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Novo Plano
-                      </Button>
+                      <div className="flex gap-2">
+                        {scene.shots.length === 0 && (
+                          <Button
+                            onClick={() => generateShotsWithAI(scene)}
+                            size="sm"
+                            variant="default"
+                          >
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Gerar com IA
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() => addShot(scene.id)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Novo Plano
+                        </Button>
+                      </div>
                     </div>
 
                     {scene.shots.length === 0 ? (

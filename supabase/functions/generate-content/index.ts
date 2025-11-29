@@ -70,6 +70,29 @@ serve(async (req) => {
         userPrompt = `Baseado na seguinte escaleta, escreva um roteiro completo formatado profissionalmente. Inclua cabeçalhos de cena (INT/EXT, local, período), descrições de ação e diálogos realistas. Mantenha a formatação de roteiro tradicional.\n\nEscaleta:\n${scenesDesc}`;
         break;
 
+      case "technical_breakdown":
+        systemPrompt = "Você é um diretor de fotografia e assistente de direção especializado em decupagem técnica cinematográfica.";
+        userPrompt = `Analise a seguinte cena e crie uma decupagem técnica com 4-6 planos diferentes. Retorne APENAS um array JSON válido no formato:
+[{
+  "shot_number": "número do plano (ex: ${context.scene_number}.1)",
+  "shot_type": "tipo (GPG, PG, PA, PM, PP, PPP ou Detalhe)",
+  "framing": "enquadramento (ex: Frontal, Contra-plongée, Plongée)",
+  "movement": "movimento de câmera (ex: Travelling, Pan, Tilt, Fixa, Steadicam)",
+  "lens": "lente sugerida (ex: 24mm, 50mm, 85mm)",
+  "equipment": ["array", "de", "equipamentos"],
+  "lighting_setup": "descrição do setup de iluminação",
+  "sound_notes": "notas sobre captação de áudio",
+  "vfx_notes": "notas sobre efeitos visuais necessários",
+  "notes": "observações gerais",
+  "estimated_setup_time": número_inteiro_em_minutos
+}]
+
+CENA ${context.scene_number} - ${context.int_ext}. ${context.location} - ${context.time_of_day}
+${context.description}
+
+Crie planos variados que contem a história de forma cinematográfica, incluindo diferentes tipos de plano e movimentos de câmera.`;
+        break;
+
       default:
         throw new Error("Tipo de conteúdo inválido");
     }
