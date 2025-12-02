@@ -198,9 +198,11 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
     }
   };
 
+  const [generatingAll, setGeneratingAll] = useState(false);
+
   const generateShotsWithAI = async (scene: Scene) => {
     try {
-      toast.loading("Gerando decupagem com IA...");
+      toast.loading(`Gerando decupagem completa para Cena ${scene.scene_number}...`);
       
       const { data, error } = await supabase.functions.invoke("generate-content", {
         body: {
@@ -249,13 +251,59 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
 
       if (insertError) throw insertError;
 
-      await loadScenes();
-      toast.success(`${generatedShots.length} planos gerados com sucesso!`);
+      return generatedShots.length;
     } catch (error) {
       console.error("Erro ao gerar decupagem:", error);
-      toast.error("Erro ao gerar decupagem com IA");
-    } finally {
+      throw error;
+    }
+  };
+
+  const generateAllShotsWithAI = async () => {
+    const scenesWithoutShots = scenes.filter(s => s.shots.length === 0);
+    
+    if (scenesWithoutShots.length === 0) {
+      toast.info("Todas as cenas já possuem planos gerados");
+      return;
+    }
+
+    setGeneratingAll(true);
+    let totalShots = 0;
+
+    try {
+      for (let i = 0; i < scenesWithoutShots.length; i++) {
+        const scene = scenesWithoutShots[i];
+        toast.loading(`Gerando decupagem: Cena ${scene.scene_number} (${i + 1}/${scenesWithoutShots.length})...`);
+        
+        const shotsGenerated = await generateShotsWithAI(scene);
+        totalShots += shotsGenerated;
+        
+        // Pequena pausa entre requisições para evitar rate limit
+        if (i < scenesWithoutShots.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+      }
+
+      await loadScenes();
       toast.dismiss();
+      toast.success(`Decupagem completa! ${totalShots} planos gerados em ${scenesWithoutShots.length} cenas`);
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Erro ao gerar decupagem. Tente novamente.");
+    } finally {
+      setGeneratingAll(false);
+    }
+  };
+
+  const generateSingleSceneShots = async (scene: Scene) => {
+    try {
+      toast.loading(`Gerando decupagem completa para Cena ${scene.scene_number}...`);
+      const shotsGenerated = await generateShotsWithAI(scene);
+      await loadScenes();
+      toast.dismiss();
+      toast.success(`${shotsGenerated} planos gerados com sucesso!`);
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Erro ao gerar decupagem com IA");
     }
   };
 
@@ -410,6 +458,8 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
     );
   }
 
+  const scenesWithoutShots = scenes.filter(s => s.shots.length === 0);
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <Card>
@@ -420,10 +470,22 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
               Planeje os planos e detalhes técnicos de cada cena
             </CardDescription>
           </div>
-          <Button onClick={exportDecupagemPDF} variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Exportar PDF
-          </Button>
+          <div className="flex gap-2">
+            {scenesWithoutShots.length > 0 && (
+              <Button 
+                onClick={generateAllShotsWithAI} 
+                variant="default"
+                disabled={generatingAll}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                {generatingAll ? "Gerando..." : `Gerar Todas (${scenesWithoutShots.length} cenas)`}
+              </Button>
+            )}
+            <Button onClick={exportDecupagemPDF} variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              Exportar PDF
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Accordion type="multiple" className="space-y-4">
@@ -445,9 +507,10 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
                       <div className="flex gap-2">
                         {scene.shots.length === 0 && (
                           <Button
-                            onClick={() => generateShotsWithAI(scene)}
+                            onClick={() => generateSingleSceneShots(scene)}
                             size="sm"
                             variant="default"
+                            disabled={generatingAll}
                           >
                             <Sparkles className="w-4 h-4 mr-2" />
                             Gerar com IA
