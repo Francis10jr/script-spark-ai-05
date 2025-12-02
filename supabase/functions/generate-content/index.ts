@@ -71,26 +71,38 @@ serve(async (req) => {
         break;
 
       case "technical_breakdown":
-        systemPrompt = "Você é um diretor de fotografia e assistente de direção especializado em decupagem técnica cinematográfica.";
-        userPrompt = `Analise a seguinte cena e crie uma decupagem técnica com 4-6 planos diferentes. Retorne APENAS um array JSON válido no formato:
-[{
-  "shot_number": "número do plano (ex: ${context.scene_number}.1)",
-  "shot_type": "tipo (GPG, PG, PA, PM, PP, PPP ou Detalhe)",
-  "framing": "enquadramento (ex: Frontal, Contra-plongée, Plongée)",
-  "movement": "movimento de câmera (ex: Travelling, Pan, Tilt, Fixa, Steadicam)",
-  "lens": "lente sugerida (ex: 24mm, 50mm, 85mm)",
-  "equipment": ["array", "de", "equipamentos"],
-  "lighting_setup": "descrição do setup de iluminação",
-  "sound_notes": "notas sobre captação de áudio",
-  "vfx_notes": "notas sobre efeitos visuais necessários",
-  "notes": "observações gerais",
-  "estimated_setup_time": número_inteiro_em_minutos
-}]
+        systemPrompt = "Você é um diretor de fotografia premiado e assistente de direção experiente, especializado em decupagem técnica cinematográfica profissional. Você cria decupagens detalhadas que cobrem TODOS os planos necessários para filmar uma cena completa.";
+        userPrompt = `Crie uma DECUPAGEM TÉCNICA COMPLETA E PROFISSIONAL para a seguinte cena. Analise a ação descrita e gere TODOS os planos necessários para filmá-la cinematograficamente (geralmente entre 8-20 planos por cena, dependendo da complexidade).
 
 CENA ${context.scene_number} - ${context.int_ext}. ${context.location} - ${context.time_of_day}
 ${context.description}
 
-Crie planos variados que contem a história de forma cinematográfica, incluindo diferentes tipos de plano e movimentos de câmera.`;
+INSTRUÇÕES IMPORTANTES:
+1. Gere TODOS os planos necessários para contar a história visualmente - não limite a quantidade
+2. Inclua planos de estabelecimento, planos de reação, inserts de detalhes, planos de cobertura
+3. Varie os tipos de plano: GPG (Grande Plano Geral), PG (Plano Geral), PA (Plano Americano), PM (Plano Médio), PP (Primeiro Plano), PPP (Primeiríssimo Plano), Detalhe
+4. Use movimentos de câmera variados: Travelling (in/out/lateral), Pan, Tilt, Steadicam, Dolly, Crane, Fixa, Handheld
+5. Especifique lentes reais: 16mm, 24mm, 35mm, 50mm, 85mm, 100mm macro, etc.
+6. Detalhe a iluminação: key light, fill light, backlight, practicals, motivação da luz
+7. Inclua notas de som: diálogo, som ambiente, efeitos sonoros necessários
+8. Mencione VFX se necessário: composição, remoção de elementos, correção de cor
+
+Retorne APENAS um array JSON válido no formato:
+[{
+  "shot_number": "${context.scene_number}.1",
+  "shot_type": "PG",
+  "framing": "Frontal levemente baixo",
+  "movement": "Travelling in lento",
+  "lens": "35mm",
+  "equipment": ["Dolly", "Trilho 6m", "Steadicam opcional"],
+  "lighting_setup": "Key light HMI 4K pela janela, fill com rebatedor, backlight suave",
+  "sound_notes": "Som direto boom, captar ambiente do local",
+  "vfx_notes": "Nenhum necessário",
+  "notes": "Plano de estabelecimento, manter headroom adequado",
+  "estimated_setup_time": 20
+}]
+
+GERE TODOS OS PLANOS necessários para uma decupagem profissional completa desta cena.`;
         break;
 
       default:
@@ -104,7 +116,7 @@ Crie planos variados que contem a história de forma cinematográfica, incluindo
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: type === "beat_sheet" && context.script ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash",
+        model: (type === "beat_sheet" && context.script) || type === "technical_breakdown" ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
