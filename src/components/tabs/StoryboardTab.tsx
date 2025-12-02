@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Sparkles, Trash2, Camera, Image as ImageIcon } from "lucide-react";
+import { Sparkles, Trash2, Camera, Image as ImageIcon, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import jsPDF from "jspdf";
 
 interface Scene {
   id: string;
@@ -149,6 +150,137 @@ export const StoryboardTab = ({ projectId }: StoryboardTabProps) => {
     }
   };
 
+  const exportStoryboardPDF = async () => {
+    toast.loading("Gerando PDF do Storyboard...");
+    
+    try {
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const margin = 15;
+      let yPos = 20;
+
+      // Título
+      pdf.setFontSize(20);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("STORYBOARD", pageWidth / 2, yPos, { align: "center" });
+      yPos += 15;
+
+      for (const scene of scenes) {
+        const sceneFrames = storyboards[scene.id] || [];
+        
+        // Verifica se precisa nova página
+        if (yPos > 250) {
+          pdf.addPage();
+          yPos = 20;
+        }
+
+        // Cabeçalho da cena
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`Cena ${scene.scene_number} - ${scene.int_ext}. ${scene.location}`, margin, yPos);
+        yPos += 6;
+        
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`${scene.time_of_day || ""}`, margin, yPos);
+        yPos += 5;
+
+        if (scene.description) {
+          const descLines = pdf.splitTextToSize(scene.description, pageWidth - margin * 2);
+          pdf.text(descLines, margin, yPos);
+          yPos += descLines.length * 4 + 5;
+        }
+
+        // Frames da cena
+        for (const frame of sceneFrames) {
+          if (yPos > 200) {
+            pdf.addPage();
+            yPos = 20;
+          }
+
+          // Imagem do frame
+          if (frame.image_url) {
+            try {
+              const imgData = await loadImageAsBase64(frame.image_url);
+              if (imgData) {
+                pdf.addImage(imgData, "JPEG", margin, yPos, 80, 45);
+                
+                // Info do frame ao lado da imagem
+                const infoX = margin + 85;
+                pdf.setFontSize(11);
+                pdf.setFont("helvetica", "bold");
+                pdf.text(`Frame ${frame.frame_number}`, infoX, yPos + 5);
+                
+                pdf.setFontSize(9);
+                pdf.setFont("helvetica", "normal");
+                if (frame.camera_angle) {
+                  pdf.text(`Ângulo: ${frame.camera_angle}`, infoX, yPos + 12);
+                }
+                if (frame.camera_movement) {
+                  pdf.text(`Movimento: ${frame.camera_movement}`, infoX, yPos + 18);
+                }
+                if (frame.description) {
+                  const descLines = pdf.splitTextToSize(frame.description, pageWidth - infoX - margin);
+                  pdf.text(descLines, infoX, yPos + 24);
+                }
+                
+                yPos += 52;
+              }
+            } catch (imgError) {
+              console.error("Erro ao carregar imagem:", imgError);
+              // Se não conseguir carregar a imagem, mostra só texto
+              pdf.setFontSize(11);
+              pdf.setFont("helvetica", "bold");
+              pdf.text(`Frame ${frame.frame_number}`, margin, yPos);
+              yPos += 8;
+            }
+          } else {
+            // Frame sem imagem
+            pdf.setFontSize(11);
+            pdf.setFont("helvetica", "bold");
+            pdf.text(`Frame ${frame.frame_number}`, margin, yPos);
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(9);
+            if (frame.camera_angle) {
+              pdf.text(`Ângulo: ${frame.camera_angle}`, margin, yPos + 6);
+            }
+            if (frame.camera_movement) {
+              pdf.text(`Movimento: ${frame.camera_movement}`, margin, yPos + 11);
+            }
+            yPos += 18;
+          }
+        }
+
+        yPos += 10;
+      }
+
+      pdf.save("storyboard.pdf");
+      toast.dismiss();
+      toast.success("Storyboard exportado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao exportar PDF:", error);
+      toast.dismiss();
+      toast.error("Erro ao exportar storyboard");
+    }
+  };
+
+  const loadImageAsBase64 = (url: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -175,11 +307,19 @@ export const StoryboardTab = ({ projectId }: StoryboardTabProps) => {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Storyboard</CardTitle>
-          <CardDescription>
-            Gere frames visuais para cada cena do seu projeto usando IA
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Storyboard</CardTitle>
+            <CardDescription>
+              Gere frames visuais para cada cena do seu projeto usando IA
+            </CardDescription>
+          </div>
+          {scenes.length > 0 && Object.keys(storyboards).some(k => storyboards[k]?.length > 0) && (
+            <Button onClick={exportStoryboardPDF} variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              Exportar PDF
+            </Button>
+          )}
         </CardHeader>
       </Card>
 
