@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, Video, Sparkles } from "lucide-react";
+import { Plus, Trash2, Save, Video, Sparkles, Download } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { supabase } from "@/integrations/supabase/client";
+import jsPDF from "jspdf";
 
 interface Shot {
   id: string;
@@ -216,7 +217,15 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
 
       if (error) throw error;
 
-      const generatedShots = JSON.parse(data.content);
+      // Remove markdown code blocks se existirem
+      let cleanContent = data.content.trim();
+      if (cleanContent.startsWith("```json")) {
+        cleanContent = cleanContent.replace(/^```json\s*\n/, "").replace(/\n```\s*$/, "");
+      } else if (cleanContent.startsWith("```")) {
+        cleanContent = cleanContent.replace(/^```\s*\n/, "").replace(/\n```\s*$/, "");
+      }
+
+      const generatedShots = JSON.parse(cleanContent);
       
       // Salva os planos gerados no banco
       const shotsToInsert = generatedShots.map((shot: any) => ({
@@ -250,6 +259,134 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
     }
   };
 
+  const exportDecupagemPDF = () => {
+    toast.loading("Gerando PDF da Decupagem...");
+    
+    try {
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const margin = 15;
+      let yPos = 20;
+
+      // Título
+      pdf.setFontSize(20);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("DECUPAGEM TÉCNICA", pageWidth / 2, yPos, { align: "center" });
+      yPos += 15;
+
+      for (const scene of scenes) {
+        // Verifica se precisa nova página
+        if (yPos > 250) {
+          pdf.addPage();
+          yPos = 20;
+        }
+
+        // Cabeçalho da cena
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`Cena ${scene.scene_number} - ${scene.int_ext} ${scene.location}`, margin, yPos);
+        yPos += 6;
+        
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`${scene.time_of_day || ""}`, margin, yPos);
+        yPos += 5;
+
+        if (scene.description) {
+          const descLines = pdf.splitTextToSize(scene.description, pageWidth - margin * 2);
+          pdf.text(descLines, margin, yPos);
+          yPos += descLines.length * 4 + 5;
+        }
+
+        // Planos da cena
+        if (scene.shots.length === 0) {
+          pdf.setFontSize(9);
+          pdf.setTextColor(128);
+          pdf.text("Nenhum plano definido", margin, yPos);
+          pdf.setTextColor(0);
+          yPos += 8;
+        } else {
+          for (const shot of scene.shots) {
+            if (yPos > 260) {
+              pdf.addPage();
+              yPos = 20;
+            }
+
+            // Cabeçalho do plano
+            pdf.setFontSize(11);
+            pdf.setFont("helvetica", "bold");
+            pdf.text(`Plano ${shot.shot_number}`, margin, yPos);
+            yPos += 5;
+
+            pdf.setFontSize(9);
+            pdf.setFont("helvetica", "normal");
+
+            const col1X = margin;
+            const col2X = margin + 60;
+            const col3X = margin + 120;
+
+            // Linha 1
+            if (shot.shot_type) pdf.text(`Tipo: ${shot.shot_type}`, col1X, yPos);
+            if (shot.framing) pdf.text(`Enquadramento: ${shot.framing}`, col2X, yPos);
+            yPos += 4;
+
+            // Linha 2
+            if (shot.movement) pdf.text(`Movimento: ${shot.movement}`, col1X, yPos);
+            if (shot.lens) pdf.text(`Lente: ${shot.lens}`, col2X, yPos);
+            if (shot.estimated_setup_time) pdf.text(`Setup: ${shot.estimated_setup_time} min`, col3X, yPos);
+            yPos += 4;
+
+            // Equipamentos
+            if (shot.equipment && shot.equipment.length > 0) {
+              pdf.text(`Equipamentos: ${shot.equipment.join(", ")}`, col1X, yPos);
+              yPos += 4;
+            }
+
+            // Iluminação
+            if (shot.lighting_setup) {
+              const lightLines = pdf.splitTextToSize(`Iluminação: ${shot.lighting_setup}`, pageWidth - margin * 2);
+              pdf.text(lightLines, col1X, yPos);
+              yPos += lightLines.length * 4;
+            }
+
+            // Notas de som
+            if (shot.sound_notes) {
+              const soundLines = pdf.splitTextToSize(`Som: ${shot.sound_notes}`, pageWidth - margin * 2);
+              pdf.text(soundLines, col1X, yPos);
+              yPos += soundLines.length * 4;
+            }
+
+            // VFX
+            if (shot.vfx_notes) {
+              const vfxLines = pdf.splitTextToSize(`VFX: ${shot.vfx_notes}`, pageWidth - margin * 2);
+              pdf.text(vfxLines, col1X, yPos);
+              yPos += vfxLines.length * 4;
+            }
+
+            // Notas gerais
+            if (shot.notes) {
+              const notesLines = pdf.splitTextToSize(`Notas: ${shot.notes}`, pageWidth - margin * 2);
+              pdf.text(notesLines, col1X, yPos);
+              yPos += notesLines.length * 4;
+            }
+
+            yPos += 5;
+          }
+        }
+
+        yPos += 8;
+      }
+
+      pdf.save("decupagem-tecnica.pdf");
+      toast.dismiss();
+      toast.success("Decupagem exportada com sucesso!");
+    } catch (error) {
+      console.error("Erro ao exportar PDF:", error);
+      toast.dismiss();
+      toast.error("Erro ao exportar decupagem");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -276,11 +413,19 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Decupagem Técnica</CardTitle>
-          <CardDescription>
-            Planeje os planos e detalhes técnicos de cada cena
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Decupagem Técnica</CardTitle>
+            <CardDescription>
+              Planeje os planos e detalhes técnicos de cada cena
+            </CardDescription>
+          </div>
+          {scenes.some(s => s.shots.length > 0) && (
+            <Button onClick={exportDecupagemPDF} variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              Exportar PDF
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <Accordion type="multiple" className="space-y-4">
