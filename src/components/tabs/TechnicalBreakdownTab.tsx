@@ -420,12 +420,10 @@ export const TechnicalBreakdownTab = ({ projectId }: TechnicalBreakdownTabProps)
               Planeje os planos e detalhes técnicos de cada cena
             </CardDescription>
           </div>
-          {scenes.some(s => s.shots.length > 0) && (
-            <Button onClick={exportDecupagemPDF} variant="outline">
-              <Download className="w-4 h-4 mr-2" />
-              Exportar PDF
-            </Button>
-          )}
+          <Button onClick={exportDecupagemPDF} variant="outline">
+            <Download className="w-4 h-4 mr-2" />
+            Exportar PDF
+          </Button>
         </CardHeader>
         <CardContent>
           <Accordion type="multiple" className="space-y-4">

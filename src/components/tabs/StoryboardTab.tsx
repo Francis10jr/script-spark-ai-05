@@ -314,12 +314,10 @@ export const StoryboardTab = ({ projectId }: StoryboardTabProps) => {
               Gere frames visuais para cada cena do seu projeto usando IA
             </CardDescription>
           </div>
-          {scenes.length > 0 && Object.keys(storyboards).some(k => storyboards[k]?.length > 0) && (
-            <Button onClick={exportStoryboardPDF} variant="outline">
-              <Download className="w-4 h-4 mr-2" />
-              Exportar PDF
-            </Button>
-          )}
+          <Button onClick={exportStoryboardPDF} variant="outline">
+            <Download className="w-4 h-4 mr-2" />
+            Exportar PDF
+          </Button>
         </CardHeader>
       </Card>
 
