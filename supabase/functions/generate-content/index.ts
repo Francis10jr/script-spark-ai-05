@@ -18,6 +18,8 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY não configurada");
     }
 
+    console.log(`Generating content type: ${type}`);
+
     let systemPrompt = "";
     let userPrompt = "";
 
@@ -52,12 +54,10 @@ serve(async (req) => {
       case "beat_sheet":
         systemPrompt = "Você é um roteirista profissional especializado em criar escaletas detalhadas a partir de roteiros.";
         if (context.script) {
-          // Geração a partir do roteiro completo
           userPrompt = `Analise o seguinte roteiro completo e extraia TODAS as cenas dele em formato de escaleta. Identifique cada cena, seu número, se é INT/EXT, o local, período do dia (DIA/NOITE/etc), descrição do que acontece, personagens envolvidos e duração estimada em minutos (SEMPRE USE NÚMEROS INTEIROS para duration, nunca decimais). Retorne APENAS um array JSON válido de objetos no formato: [{"id": "scene-X", "number": 1, "intExt": "INT", "location": "nome do local", "dayNight": "DIA", "description": "descrição resumida da ação", "characters": ["personagem1", "personagem2"], "duration": 2}]\n\nIMPORTANTE: 
 - Extraia TODAS as cenas do roteiro, não limite a 8-12. Se o roteiro tem 19 cenas, retorne 19. Se tem 8, retorne 8.
 - O campo "duration" DEVE ser sempre um número inteiro (1, 2, 3, 4, 5, etc), NUNCA use decimais como 0.5 ou 1.5.\n\nRoteiro:\n${context.script}`;
         } else {
-          // Geração a partir da storyline
           userPrompt = `Baseado na seguinte storyline, crie uma escaleta com 8-12 cenas. Retorne APENAS um array JSON válido de objetos no formato: [{"id": "scene-X", "number": 1, "intExt": "INT", "location": "nome do local", "dayNight": "DIA", "description": "descrição da cena", "characters": [], "duration": 2}]\n\nIMPORTANTE: O campo "duration" DEVE ser sempre um número inteiro (1, 2, 3, 4, 5, etc), NUNCA use decimais.\n\nStoryline:\nAto 1: ${context.storyline?.acts?.act1}\nAto 2: ${context.storyline?.acts?.act2}\nAto 3: ${context.storyline?.acts?.act3}`;
         }
         break;
@@ -71,43 +71,57 @@ serve(async (req) => {
         break;
 
       case "technical_breakdown":
-        systemPrompt = "Você é um diretor de fotografia premiado e assistente de direção experiente, especializado em decupagem técnica cinematográfica profissional. Você cria decupagens detalhadas que cobrem TODOS os planos necessários para filmar uma cena completa.";
-        userPrompt = `Crie uma DECUPAGEM TÉCNICA COMPLETA E PROFISSIONAL para a seguinte cena. Analise a ação descrita e gere TODOS os planos necessários para filmá-la cinematograficamente (geralmente entre 8-20 planos por cena, dependendo da complexidade).
+        systemPrompt = `Você é um diretor de fotografia premiado e 1º assistente de direção experiente. Você cria decupagens técnicas cinematográficas COMPLETAS e PROFISSIONAIS.
+
+REGRAS OBRIGATÓRIAS:
+1. Gere entre 8 e 20 planos por cena, dependendo da complexidade
+2. NUNCA gere apenas 1 ou 2 planos - isso é insuficiente
+3. Cubra TODA a ação da cena com planos específicos
+4. Inclua obrigatoriamente: planos de estabelecimento, planos médios, close-ups, inserts e planos de reação`;
+
+        userPrompt = `Crie uma DECUPAGEM TÉCNICA COMPLETA E PROFISSIONAL para esta cena. Você DEVE gerar MÚLTIPLOS PLANOS (entre 8 e 20) para cobrir toda a ação cinematograficamente.
 
 CENA ${context.scene_number} - ${context.int_ext}. ${context.location} - ${context.time_of_day}
+
+DESCRIÇÃO DA CENA:
 ${context.description}
 
-INSTRUÇÕES IMPORTANTES:
-1. Gere TODOS os planos necessários para contar a história visualmente - não limite a quantidade
-2. Inclua planos de estabelecimento, planos de reação, inserts de detalhes, planos de cobertura
-3. Varie os tipos de plano: GPG (Grande Plano Geral), PG (Plano Geral), PA (Plano Americano), PM (Plano Médio), PP (Primeiro Plano), PPP (Primeiríssimo Plano), Detalhe
-4. Use movimentos de câmera variados: Travelling (in/out/lateral), Pan, Tilt, Steadicam, Dolly, Crane, Fixa, Handheld
-5. Especifique lentes reais: 16mm, 24mm, 35mm, 50mm, 85mm, 100mm macro, etc.
-6. Detalhe a iluminação: key light, fill light, backlight, practicals, motivação da luz
-7. Inclua notas de som: diálogo, som ambiente, efeitos sonoros necessários
-8. Mencione VFX se necessário: composição, remoção de elementos, correção de cor
+INSTRUÇÕES OBRIGATÓRIAS:
+1. Gere entre 8-20 planos diferentes para esta cena
+2. OBRIGATÓRIO incluir: plano de estabelecimento (GPG ou PG), planos médios das ações, close-ups dos personagens, inserts de objetos importantes, planos de reação
+3. Varie os tipos: GPG, PG, PA, PM, PP, PPP, Detalhe, Over-shoulder, POV
+4. Varie movimentos: Fixa, Pan, Tilt, Travelling, Dolly, Steadicam, Handheld, Crane
+5. Especifique lentes reais: 16mm, 24mm, 35mm, 50mm, 85mm, 100mm
+6. Detalhe a iluminação para cada plano
+7. Inclua notas de som específicas
+8. Mencione VFX quando necessário
 
-Retorne APENAS um array JSON válido no formato:
-[{
-  "shot_number": "${context.scene_number}.1",
-  "shot_type": "PG",
-  "framing": "Frontal levemente baixo",
-  "movement": "Travelling in lento",
-  "lens": "35mm",
-  "equipment": ["Dolly", "Trilho 6m", "Steadicam opcional"],
-  "lighting_setup": "Key light HMI 4K pela janela, fill com rebatedor, backlight suave",
-  "sound_notes": "Som direto boom, captar ambiente do local",
-  "vfx_notes": "Nenhum necessário",
-  "notes": "Plano de estabelecimento, manter headroom adequado",
-  "estimated_setup_time": 20
-}]
+FORMATO DE RESPOSTA - Retorne APENAS um array JSON:
+[
+  {
+    "shot_number": "${context.scene_number}.1",
+    "shot_type": "GPG",
+    "framing": "Frontal",
+    "movement": "Fixa",
+    "lens": "24mm",
+    "equipment": ["Tripé", "Cabeça fluida"],
+    "lighting_setup": "Luz natural, fill com rebatedor",
+    "sound_notes": "Captar ambiente",
+    "vfx_notes": "Nenhum",
+    "notes": "Plano de estabelecimento",
+    "estimated_setup_time": 15
+  },
+  ... mais 7-19 planos ...
+]
 
-GERE TODOS OS PLANOS necessários para uma decupagem profissional completa desta cena.`;
+ATENÇÃO: Gere TODOS os planos necessários. Uma cena completa precisa de NO MÍNIMO 8 planos.`;
         break;
 
       default:
         throw new Error("Tipo de conteúdo inválido");
     }
+
+    console.log(`Sending request to AI gateway for type: ${type}`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -121,11 +135,17 @@ GERE TODOS OS PLANOS necessários para uma decupagem profissional completa desta
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.8,
+        temperature: 0.7,
+        max_tokens: 8000,
       }),
     });
 
+    console.log(`AI gateway response status: ${response.status}`);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`AI gateway error: ${response.status} - ${errorText}`);
+      
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Limite de requisições atingido. Tente novamente em alguns instantes." }),
@@ -138,18 +158,39 @@ GERE TODOS OS PLANOS necessários para uma decupagem profissional completa desta
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      throw new Error("Erro na API de IA");
+      throw new Error(`Erro na API de IA: ${response.status}`);
     }
 
-    const data = await response.json();
+    const responseText = await response.text();
+    console.log(`AI response length: ${responseText.length} chars`);
+    
+    if (!responseText || responseText.trim() === "") {
+      throw new Error("Resposta vazia da IA");
+    }
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(`Failed to parse AI response: ${responseText.substring(0, 500)}`);
+      throw new Error("Resposta inválida da IA");
+    }
+
     const content = data.choices?.[0]?.message?.content || "";
+    
+    if (!content) {
+      console.error("No content in AI response:", JSON.stringify(data).substring(0, 500));
+      throw new Error("Conteúdo vazio na resposta da IA");
+    }
+
+    console.log(`Successfully generated content, length: ${content.length} chars`);
 
     return new Response(
       JSON.stringify({ content }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
-    console.error("Erro:", error);
+    console.error("Erro:", error.message);
     return new Response(
       JSON.stringify({ error: error.message || "Erro ao gerar conteúdo" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
