@@ -117,6 +117,39 @@ FORMATO DE RESPOSTA - Retorne APENAS um array JSON:
 ATENÇÃO: Gere TODOS os planos necessários. Uma cena completa precisa de NO MÍNIMO 8 planos.`;
         break;
 
+      case "budget":
+        systemPrompt = `Você é um produtor executivo de cinema experiente, especialista em orçamentos de produção audiovisual brasileira. Crie orçamentos detalhados e realistas baseados no conteúdo do projeto.`;
+        userPrompt = `Baseado no seguinte projeto audiovisual, crie uma lista de itens de orçamento completa e realista.
+
+INFORMAÇÕES DO PROJETO:
+- Número de cenas: ${context.scenesCount || "não especificado"}
+- Roteiro: ${context.script ? "Sim" : "Não disponível"}
+- Cenas: ${JSON.stringify(context.scenes?.slice(0, 5) || [])}
+
+INSTRUÇÕES:
+1. Crie entre 15-30 itens de orçamento cobrindo todas as categorias principais
+2. Inclua: pré-produção, produção, pós-produção, elenco, equipe técnica, locação, equipamento, arte, figurino, alimentação, transporte
+3. Use valores realistas em Reais (BRL) para o mercado brasileiro
+4. Considere a escala do projeto baseada no número de cenas
+
+FORMATO - Retorne APENAS um objeto JSON:
+{
+  "items": [
+    {
+      "item_name": "Diretor de Fotografia",
+      "description": "Diárias de trabalho + prep",
+      "category": "equipe",
+      "quantity": 5,
+      "unit": "diária",
+      "unit_price": 1500,
+      "notes": "Inclui equipamento próprio"
+    }
+  ]
+}
+
+Categorias válidas: pre_producao, producao, pos_producao, elenco, equipe, locacao, equipamento, arte, figurino, maquiagem, alimentacao, transporte, seguro, marketing, contingencia, outros`;
+        break;
+
       default:
         throw new Error("Tipo de conteúdo inválido");
     }
