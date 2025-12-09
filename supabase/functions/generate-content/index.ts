@@ -71,50 +71,43 @@ serve(async (req) => {
         break;
 
       case "technical_breakdown":
-        systemPrompt = `Você é um diretor de fotografia premiado e 1º assistente de direção experiente. Você cria decupagens técnicas cinematográficas COMPLETAS e PROFISSIONAIS.
+        systemPrompt = `Você é um diretor de fotografia experiente. Analise a descrição da cena e gere APENAS os planos NECESSÁRIOS e ESPECÍFICOS para o que está descrito. NÃO gere planos genéricos ou desnecessários.
 
-REGRAS OBRIGATÓRIAS:
-1. Gere entre 8 e 20 planos por cena, dependendo da complexidade
-2. NUNCA gere apenas 1 ou 2 planos - isso é insuficiente
-3. Cubra TODA a ação da cena com planos específicos
-4. Inclua obrigatoriamente: planos de estabelecimento, planos médios, close-ups, inserts e planos de reação`;
+PRINCÍPIO: Menos é mais. Cada plano deve ter um propósito claro baseado na ação descrita.`;
 
-        userPrompt = `Crie uma DECUPAGEM TÉCNICA COMPLETA E PROFISSIONAL para esta cena. Você DEVE gerar MÚLTIPLOS PLANOS (entre 8 e 20) para cobrir toda a ação cinematograficamente.
+        userPrompt = `Analise esta cena e crie uma decupagem técnica com APENAS os planos NECESSÁRIOS para contar o que está descrito. NÃO adicione planos genéricos.
 
 CENA ${context.scene_number} - ${context.int_ext}. ${context.location} - ${context.time_of_day}
 
-DESCRIÇÃO DA CENA:
+DESCRIÇÃO:
 ${context.description}
 
-INSTRUÇÕES OBRIGATÓRIAS:
-1. Gere entre 8-20 planos diferentes para esta cena
-2. OBRIGATÓRIO incluir: plano de estabelecimento (GPG ou PG), planos médios das ações, close-ups dos personagens, inserts de objetos importantes, planos de reação
-3. Varie os tipos: GPG, PG, PA, PM, PP, PPP, Detalhe, Over-shoulder, POV
-4. Varie movimentos: Fixa, Pan, Tilt, Travelling, Dolly, Steadicam, Handheld, Crane
-5. Especifique lentes reais: 16mm, 24mm, 35mm, 50mm, 85mm, 100mm
-6. Detalhe a iluminação para cada plano
-7. Inclua notas de som específicas
-8. Mencione VFX quando necessário
+REGRAS:
+1. Leia a descrição cuidadosamente e identifique APENAS as ações e elementos que precisam ser mostrados
+2. Gere o número EXATO de planos necessários (pode ser 3, 5, 8 ou mais - depende do que a cena descreve)
+3. Para cenas curtas e simples: 3-5 planos são suficientes
+4. Para cenas complexas com múltiplas ações: mais planos são necessários
+5. Cada plano deve servir para mostrar algo ESPECÍFICO da descrição
+6. NÃO adicione planos "de reação" ou "inserts" se não forem mencionados ou implícitos na descrição
 
-FORMATO DE RESPOSTA - Retorne APENAS um array JSON:
+FORMATO - Retorne APENAS um array JSON:
 [
   {
     "shot_number": "${context.scene_number}.1",
-    "shot_type": "GPG",
+    "shot_type": "PG",
     "framing": "Frontal",
     "movement": "Fixa",
-    "lens": "24mm",
-    "equipment": ["Tripé", "Cabeça fluida"],
-    "lighting_setup": "Luz natural, fill com rebatedor",
-    "sound_notes": "Captar ambiente",
+    "lens": "35mm",
+    "equipment": ["Tripé"],
+    "lighting_setup": "Descrição da luz",
+    "sound_notes": "Notas de som",
     "vfx_notes": "Nenhum",
-    "notes": "Plano de estabelecimento",
-    "estimated_setup_time": 15
-  },
-  ... mais 7-19 planos ...
+    "notes": "Propósito específico do plano baseado na descrição",
+    "estimated_setup_time": 10
+  }
 ]
 
-ATENÇÃO: Gere TODOS os planos necessários. Uma cena completa precisa de NO MÍNIMO 8 planos.`;
+IMPORTANTE: Gere apenas o que a cena REALMENTE precisa. Qualidade > Quantidade.`;
         break;
 
       case "budget":
