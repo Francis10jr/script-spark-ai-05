@@ -143,6 +143,54 @@ FORMATO - Retorne APENAS um objeto JSON:
 Categorias válidas: pre_producao, producao, pos_producao, elenco, equipe, locacao, equipamento, arte, figurino, maquiagem, alimentacao, transporte, seguro, marketing, contingencia, outros`;
         break;
 
+      case "budget_calculate":
+        systemPrompt = `Você é um produtor executivo de cinema experiente, especialista em orçamentos de produção audiovisual brasileira. Sua função é analisar os itens de orçamento fornecidos pelo usuário e calcular/estimar custos realistas para cada item, considerando o contexto do projeto.`;
+        
+        const existingItemsList = context.existingItems?.map((item: any, index: number) => 
+          `${index + 1}. ${item.name} (${item.category}) - Qtd: ${item.quantity} ${item.unit} - Preço atual: R$ ${item.current_unit_price || 0}`
+        ).join("\n") || "Nenhum item";
+
+        userPrompt = `Analise os itens de orçamento abaixo e calcule/estime preços unitários REALISTAS para o mercado brasileiro de produção audiovisual.
+
+CONTEXTO DO PROJETO:
+- Número de cenas: ${context.scenesCount || "não especificado"}
+- Roteiro disponível: ${context.script ? "Sim" : "Não"}
+
+ITENS DO ORÇAMENTO (fornecidos pelo usuário):
+${existingItemsList}
+
+INSTRUÇÕES:
+1. Para CADA item listado acima, calcule um preço unitário REALISTA baseado no mercado brasileiro atual
+2. Se o item já tem preço (diferente de 0), avalie se está adequado e ajuste se necessário
+3. Considere a escala do projeto (número de cenas) para ajustar valores
+4. Adicione descrições detalhadas e notas úteis para cada item
+5. Se identificar itens ESSENCIAIS que estão faltando, inclua-os no final como sugestões
+6. Organize por setores/etapas do projeto
+
+FORMATO - Retorne APENAS um objeto JSON:
+{
+  "items": [
+    {
+      "item_name": "Nome exato do item (igual ao fornecido)",
+      "description": "Descrição detalhada do serviço/produto",
+      "category": "categoria",
+      "quantity": 1,
+      "unit": "unidade",
+      "unit_price": 1500.00,
+      "supplier": "Sugestão de fornecedor (se aplicável)",
+      "notes": "Justificativa do valor e observações importantes"
+    }
+  ]
+}
+
+IMPORTANTE: 
+- Mantenha os nomes dos itens EXATAMENTE como fornecidos para que possam ser atualizados
+- Os valores devem refletir preços reais do mercado audiovisual brasileiro 2024
+- Divida claramente por: PRÉ-PRODUÇÃO, PRODUÇÃO, PÓS-PRODUÇÃO, ELENCO, EQUIPE, LOCAÇÕES, EQUIPAMENTOS, ARTE, FIGURINO, ALIMENTAÇÃO, TRANSPORTE
+
+Categorias válidas: pre_producao, producao, pos_producao, elenco, equipe, locacao, equipamento, arte, figurino, maquiagem, alimentacao, transporte, seguro, marketing, contingencia, outros`;
+        break;
+
       default:
         throw new Error("Tipo de conteúdo inválido");
     }
