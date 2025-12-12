@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Edit2, Download, DollarSign, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Trash2, Edit2, Download, DollarSign, Sparkles, Loader2, Upload, FileSpreadsheet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
@@ -82,6 +82,8 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
   const [formData, setFormData] = useState<Omit<BudgetItem, "id">>(emptyItem);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadBudgetItems();
@@ -184,10 +186,126 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
     setDialogOpen(true);
   };
 
-  const generateWithAI = async () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = [
+      "text/csv",
+      "text/plain",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    ];
+    
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    
+    if (!allowedTypes.includes(file.type) && !["csv", "txt", "xls", "xlsx"].includes(extension || "")) {
+      toast.error("Formato não suportado. Use CSV, TXT, XLS ou XLSX.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx. 5MB)");
+      return;
+    }
+
+    setUploading(true);
+    
+    try {
+      const text = await file.text();
+      const lines = text.split("\n").filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        toast.error("Arquivo vazio ou sem itens");
+        return;
+      }
+
+      // Detectar separador (vírgula, ponto-vírgula ou tab)
+      const firstLine = lines[0];
+      const separator = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
+      
+      // Pular cabeçalho se existir
+      const hasHeader = lines[0].toLowerCase().includes("item") || 
+                        lines[0].toLowerCase().includes("nome") ||
+                        lines[0].toLowerCase().includes("descrição");
+      
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+      
+      let importedCount = 0;
+      
+      for (const line of dataLines) {
+        const parts = line.split(separator).map(p => p.trim().replace(/^["']|["']$/g, ""));
+        if (parts.length < 1 || !parts[0]) continue;
+        
+        // Formato esperado: Nome, Descrição (opcional), Categoria (opcional), Quantidade (opcional), Unidade (opcional), Preço Unitário (opcional)
+        const itemName = parts[0];
+        const description = parts[1] || null;
+        const category = mapCategory(parts[2]) || "outros";
+        const quantity = parseFloat(parts[3]) || 1;
+        const unit = parts[4] || "unidade";
+        const unitPrice = parseFloat(parts[5]?.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
+        
+        await supabase.from("budget_items").insert({
+          project_id: projectId,
+          item_name: itemName,
+          description: description,
+          category: category,
+          quantity: quantity,
+          unit: unit,
+          unit_price: unitPrice,
+          total_price: quantity * unitPrice,
+          status: "estimated",
+        });
+        
+        importedCount++;
+      }
+      
+      toast.success(`${importedCount} itens importados!`);
+      loadBudgetItems();
+      
+    } catch (error) {
+      console.error("Erro ao importar:", error);
+      toast.error("Erro ao processar arquivo");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const mapCategory = (input: string | undefined): string => {
+    if (!input) return "outros";
+    const lower = input.toLowerCase();
+    
+    if (lower.includes("pré") || lower.includes("pre-prod")) return "pre_producao";
+    if (lower.includes("pós") || lower.includes("pos-prod") || lower.includes("post")) return "pos_producao";
+    if (lower.includes("produção") || lower.includes("producao")) return "producao";
+    if (lower.includes("elenco") || lower.includes("ator") || lower.includes("cast")) return "elenco";
+    if (lower.includes("equipe") || lower.includes("crew") || lower.includes("técnic")) return "equipe";
+    if (lower.includes("locação") || lower.includes("locacao") || lower.includes("location")) return "locacao";
+    if (lower.includes("equipamento") || lower.includes("camera") || lower.includes("equipment")) return "equipamento";
+    if (lower.includes("arte") || lower.includes("cenografia") || lower.includes("set")) return "arte";
+    if (lower.includes("figurino") || lower.includes("costume")) return "figurino";
+    if (lower.includes("maquiagem") || lower.includes("makeup")) return "maquiagem";
+    if (lower.includes("alimentação") || lower.includes("catering") || lower.includes("comida")) return "alimentacao";
+    if (lower.includes("transporte") || lower.includes("transport")) return "transporte";
+    if (lower.includes("seguro") || lower.includes("insurance")) return "seguro";
+    if (lower.includes("marketing") || lower.includes("divulgação")) return "marketing";
+    if (lower.includes("contingência") || lower.includes("contingencia")) return "contingencia";
+    
+    return "outros";
+  };
+
+  const generateBudgetWithAI = async () => {
+    if (items.length === 0) {
+      toast.error("Adicione pelo menos um item antes de gerar o orçamento com IA");
+      return;
+    }
+
     setGenerating(true);
     try {
-      // Buscar contexto do projeto (roteiro e escaleta)
+      // Buscar contexto do projeto
       const { data: contentData } = await supabase
         .from("project_content")
         .select("content_type, content")
@@ -201,16 +319,27 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
         .select("*")
         .eq("project_id", projectId);
 
+      // Preparar lista de itens atuais
+      const currentItems = items.map(item => ({
+        name: item.item_name,
+        description: item.description,
+        category: CATEGORIES.find(c => c.id === item.category)?.label || item.category,
+        quantity: item.quantity,
+        unit: item.unit,
+        current_unit_price: item.unit_price,
+      }));
+
       const context = {
         script: scriptContent?.text || "",
         beatSheet: beatSheetContent?.scenes || beatSheetContent?.acts || [],
         scenes: scenes || [],
         scenesCount: scenes?.length || 0,
+        existingItems: currentItems,
       };
 
       const { data, error } = await supabase.functions.invoke("generate-content", {
         body: {
-          type: "budget",
+          type: "budget_calculate",
           context,
         },
       });
@@ -233,29 +362,49 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
         throw new Error("Resposta inválida da IA");
       }
 
-      // Inserir itens no banco
-      for (const item of budgetItems) {
-        await supabase.from("budget_items").insert({
-          project_id: projectId,
-          item_name: item.item_name || item.name,
-          description: item.description || null,
-          category: item.category || "producao",
-          subcategory: item.subcategory || null,
-          quantity: item.quantity || 1,
-          unit: item.unit || "unidade",
-          unit_price: item.unit_price || item.unitPrice || 0,
-          total_price: (item.quantity || 1) * (item.unit_price || item.unitPrice || 0),
-          supplier: item.supplier || null,
-          status: "estimated",
-          notes: item.notes || null,
-        });
+      // Atualizar itens existentes com os preços calculados pela IA
+      for (const aiItem of budgetItems) {
+        const existingItem = items.find(
+          i => i.item_name.toLowerCase() === (aiItem.item_name || aiItem.name)?.toLowerCase()
+        );
+
+        if (existingItem) {
+          const newUnitPrice = aiItem.unit_price || aiItem.unitPrice || existingItem.unit_price || 0;
+          const newQuantity = aiItem.quantity || existingItem.quantity || 1;
+          
+          await supabase
+            .from("budget_items")
+            .update({
+              unit_price: newUnitPrice,
+              total_price: newQuantity * newUnitPrice,
+              description: aiItem.description || existingItem.description,
+              supplier: aiItem.supplier || existingItem.supplier,
+              notes: aiItem.notes || existingItem.notes,
+            })
+            .eq("id", existingItem.id);
+        } else {
+          // Adicionar novos itens sugeridos pela IA
+          await supabase.from("budget_items").insert({
+            project_id: projectId,
+            item_name: aiItem.item_name || aiItem.name,
+            description: aiItem.description || null,
+            category: mapCategory(aiItem.category) || "outros",
+            quantity: aiItem.quantity || 1,
+            unit: aiItem.unit || "unidade",
+            unit_price: aiItem.unit_price || aiItem.unitPrice || 0,
+            total_price: (aiItem.quantity || 1) * (aiItem.unit_price || aiItem.unitPrice || 0),
+            supplier: aiItem.supplier || null,
+            status: "estimated",
+            notes: aiItem.notes || null,
+          });
+        }
       }
 
-      toast.success(`${budgetItems.length} itens gerados com IA!`);
+      toast.success("Orçamento calculado pela IA com sucesso!");
       loadBudgetItems();
     } catch (error: any) {
       console.error("Erro ao gerar orçamento:", error);
-      toast.error(error.message || "Erro ao gerar orçamento com IA");
+      toast.error(error.message || "Erro ao calcular orçamento com IA");
     } finally {
       setGenerating(false);
     }
@@ -376,165 +525,343 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
             <DollarSign className="w-5 h-5" />
             Orçamento de Produção
           </CardTitle>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={exportToPDF} disabled={items.length === 0}>
               <Download className="w-4 h-4 mr-2" />
               Exportar PDF
             </Button>
-            <Button variant="outline" onClick={generateWithAI} disabled={generating}>
+            <Button 
+              variant="default" 
+              onClick={generateBudgetWithAI} 
+              disabled={generating || items.length === 0}
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+            >
               {generating ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <Sparkles className="w-4 h-4 mr-2" />
               )}
-              Gerar com IA
+              Calcular com IA
             </Button>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={openNewDialog}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Item
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingItem ? "Editar Item" : "Novo Item de Orçamento"}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                      <Label>Nome do Item *</Label>
-                      <Input
-                        value={formData.item_name}
-                        onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
-                        required
-                        placeholder="Ex: Aluguel de câmera RED"
-                      />
-                    </div>
-                    <div>
-                      <Label>Categoria *</Label>
-                      <Select
-                        value={formData.category}
-                        onValueChange={(v) => setFormData({ ...formData, category: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CATEGORIES.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Status</Label>
-                      <Select
-                        value={formData.status || "estimated"}
-                        onValueChange={(v) => setFormData({ ...formData, status: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STATUS_OPTIONS.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Quantidade</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={formData.quantity || 1}
-                        onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Unidade</Label>
-                      <Input
-                        value={formData.unit || "unidade"}
-                        onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                        placeholder="Ex: diária, unidade, hora"
-                      />
-                    </div>
-                    <div>
-                      <Label>Preço Unitário (R$)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formData.unit_price || 0}
-                        onChange={(e) => setFormData({ ...formData, unit_price: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Fornecedor</Label>
-                      <Input
-                        value={formData.supplier || ""}
-                        onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                        placeholder="Nome do fornecedor"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label>Descrição</Label>
-                      <Textarea
-                        value={formData.description || ""}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        placeholder="Detalhes sobre o item..."
-                        rows={2}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label>Notas</Label>
-                      <Textarea
-                        value={formData.notes || ""}
-                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                        placeholder="Observações adicionais..."
-                        rows={2}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button type="submit">
-                      {editingItem ? "Atualizar" : "Adicionar"}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
           </div>
         </CardHeader>
         <CardContent>
           {items.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <DollarSign className="w-12 h-12 mx-auto mb-4 opacity-30" />
-              <p className="text-lg font-medium mb-2">Nenhum item no orçamento</p>
-              <p className="text-sm mb-4">Adicione itens manualmente ou gere com IA baseado no seu roteiro.</p>
-              <div className="flex justify-center gap-3">
-                <Button variant="outline" onClick={generateWithAI} disabled={generating}>
-                  {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
-                  Gerar com IA
-                </Button>
-                <Button onClick={openNewDialog}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Item
-                </Button>
+            <div className="text-center py-12">
+              <DollarSign className="w-16 h-16 mx-auto mb-4 opacity-20" />
+              <h3 className="text-xl font-semibold mb-2">Adicione os itens do seu orçamento</h3>
+              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                Adicione os itens manualmente ou faça upload de uma planilha. Depois, a IA calculará os custos detalhados.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row justify-center gap-4">
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button onClick={openNewDialog} size="lg">
+                      <Plus className="w-5 h-5 mr-2" />
+                      Adicionar Item Manualmente
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>
+                        {editingItem ? "Editar Item" : "Novo Item de Orçamento"}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                          <Label>Nome do Item *</Label>
+                          <Input
+                            value={formData.item_name}
+                            onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
+                            required
+                            placeholder="Ex: Aluguel de câmera RED"
+                          />
+                        </div>
+                        <div>
+                          <Label>Categoria *</Label>
+                          <Select
+                            value={formData.category}
+                            onValueChange={(v) => setFormData({ ...formData, category: v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CATEGORIES.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Status</Label>
+                          <Select
+                            value={formData.status || "estimated"}
+                            onValueChange={(v) => setFormData({ ...formData, status: v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUS_OPTIONS.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Quantidade</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={formData.quantity || 1}
+                            onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Unidade</Label>
+                          <Input
+                            value={formData.unit || "unidade"}
+                            onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                            placeholder="Ex: diária, unidade, hora"
+                          />
+                        </div>
+                        <div>
+                          <Label>Preço Unitário (R$) - opcional</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData.unit_price || 0}
+                            onChange={(e) => setFormData({ ...formData, unit_price: Number(e.target.value) })}
+                            placeholder="A IA pode calcular"
+                          />
+                        </div>
+                        <div>
+                          <Label>Fornecedor</Label>
+                          <Input
+                            value={formData.supplier || ""}
+                            onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                            placeholder="Nome do fornecedor"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label>Descrição</Label>
+                          <Textarea
+                            value={formData.description || ""}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                            placeholder="Detalhes sobre o item..."
+                            rows={2}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label>Notas</Label>
+                          <Textarea
+                            value={formData.notes || ""}
+                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                            placeholder="Observações adicionais..."
+                            rows={2}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                          Cancelar
+                        </Button>
+                        <Button type="submit">
+                          {editingItem ? "Atualizar" : "Adicionar"}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                <div className="relative">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.txt,.xls,.xlsx"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={uploading}
+                  />
+                  <Button variant="outline" size="lg" disabled={uploading}>
+                    {uploading ? (
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="w-5 h-5 mr-2" />
+                    )}
+                    Upload de Planilha
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-8 p-4 bg-muted/50 rounded-lg max-w-lg mx-auto">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span className="font-medium">Formato da planilha (CSV/TXT):</span>
+                </div>
+                <code className="text-xs block text-left bg-background p-2 rounded">
+                  Nome, Descrição, Categoria, Quantidade, Unidade, Preço
+                </code>
               </div>
             </div>
           ) : (
             <>
+              {/* Action buttons for when items exist */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" onClick={openNewDialog}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Adicionar Item
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>
+                        {editingItem ? "Editar Item" : "Novo Item de Orçamento"}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                          <Label>Nome do Item *</Label>
+                          <Input
+                            value={formData.item_name}
+                            onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
+                            required
+                            placeholder="Ex: Aluguel de câmera RED"
+                          />
+                        </div>
+                        <div>
+                          <Label>Categoria *</Label>
+                          <Select
+                            value={formData.category}
+                            onValueChange={(v) => setFormData({ ...formData, category: v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CATEGORIES.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Status</Label>
+                          <Select
+                            value={formData.status || "estimated"}
+                            onValueChange={(v) => setFormData({ ...formData, status: v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUS_OPTIONS.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Quantidade</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={formData.quantity || 1}
+                            onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Unidade</Label>
+                          <Input
+                            value={formData.unit || "unidade"}
+                            onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                            placeholder="Ex: diária, unidade, hora"
+                          />
+                        </div>
+                        <div>
+                          <Label>Preço Unitário (R$)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData.unit_price || 0}
+                            onChange={(e) => setFormData({ ...formData, unit_price: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Fornecedor</Label>
+                          <Input
+                            value={formData.supplier || ""}
+                            onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                            placeholder="Nome do fornecedor"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label>Descrição</Label>
+                          <Textarea
+                            value={formData.description || ""}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                            placeholder="Detalhes sobre o item..."
+                            rows={2}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label>Notas</Label>
+                          <Textarea
+                            value={formData.notes || ""}
+                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                            placeholder="Observações adicionais..."
+                            rows={2}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                          Cancelar
+                        </Button>
+                        <Button type="submit">
+                          {editingItem ? "Atualizar" : "Adicionar"}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                <div className="relative">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.txt,.xls,.xlsx"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={uploading}
+                  />
+                  <Button variant="outline" disabled={uploading}>
+                    {uploading ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-2" />
+                    )}
+                    Upload de Planilha
+                  </Button>
+                </div>
+              </div>
+
               <div className="rounded-md border overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -577,10 +904,10 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
                         </TableCell>
                         <TableCell>
                           <span className={`text-xs px-2 py-1 rounded-full ${
-                            item.status === "paid" ? "bg-green-100 text-green-700" :
-                            item.status === "approved" ? "bg-blue-100 text-blue-700" :
-                            item.status === "quoted" ? "bg-yellow-100 text-yellow-700" :
-                            "bg-gray-100 text-gray-700"
+                            item.status === "paid" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                            item.status === "approved" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                            item.status === "quoted" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+                            "bg-muted text-muted-foreground"
                           }`}>
                             {STATUS_OPTIONS.find(s => s.id === item.status)?.label || item.status}
                           </span>
@@ -600,7 +927,11 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
                   </TableBody>
                 </Table>
               </div>
-              <div className="flex justify-end mt-4">
+              
+              <div className="flex justify-between items-center mt-4">
+                <p className="text-sm text-muted-foreground">
+                  {items.length} itens • Clique em "Calcular com IA" para obter custos detalhados
+                </p>
                 <div className="bg-primary/10 rounded-lg px-6 py-3">
                   <p className="text-sm text-muted-foreground">Total Geral</p>
                   <p className="text-2xl font-bold text-primary">
