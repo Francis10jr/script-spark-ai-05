@@ -111,10 +111,20 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
     e.preventDefault();
     
     try {
-      const totalPrice = (formData.quantity || 1) * (formData.unit_price || 0);
+      // Não incluir total_price pois é uma coluna gerada automaticamente
       const dataToSave = {
-        ...formData,
-        total_price: totalPrice,
+        item_name: formData.item_name,
+        description: formData.description,
+        category: formData.category,
+        subcategory: formData.subcategory,
+        quantity: formData.quantity,
+        unit: formData.unit,
+        unit_price: formData.unit_price,
+        supplier: formData.supplier,
+        contact: formData.contact,
+        status: formData.status,
+        payment_method: formData.payment_method,
+        notes: formData.notes,
         project_id: projectId,
       };
 
@@ -253,7 +263,6 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
           quantity: quantity,
           unit: unit,
           unit_price: unitPrice,
-          total_price: quantity * unitPrice,
           status: "estimated",
         });
         
@@ -376,7 +385,7 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
             .from("budget_items")
             .update({
               unit_price: newUnitPrice,
-              total_price: newQuantity * newUnitPrice,
+              quantity: newQuantity,
               description: aiItem.description || existingItem.description,
               supplier: aiItem.supplier || existingItem.supplier,
               notes: aiItem.notes || existingItem.notes,
@@ -392,7 +401,6 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
             quantity: aiItem.quantity || 1,
             unit: aiItem.unit || "unidade",
             unit_price: aiItem.unit_price || aiItem.unitPrice || 0,
-            total_price: (aiItem.quantity || 1) * (aiItem.unit_price || aiItem.unitPrice || 0),
             supplier: aiItem.supplier || null,
             status: "estimated",
             notes: aiItem.notes || null,
