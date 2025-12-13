@@ -694,7 +694,7 @@ export const BudgetTab = ({ projectId }: BudgetTabProps) => {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,.txt,.xls,.xlsx"
+                    accept=".csv,.txt,.xls,.xlsx,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/csv"
                     onChange={handleFileUpload}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     disabled={uploading}
